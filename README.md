@@ -1,4 +1,4 @@
-# Dungeon Row — prototype 0.5.0
+# Dungeon Row — prototype 0.5.1
 
 A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.6 single skip.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
 
@@ -39,7 +39,9 @@ Export an active run before refreshing to load an update. Runs are not saved aut
 - Scrap is always available in the interface. Click Scrap card directly on a hand card, then Undo Scrap on the same card to cancel. You can also drag its Scrap button to the shared Scrap area. One whole card can be permanently removed per turn; it provides no effects and is not replaced. Undo is available before End Turn.
 - Rules and Test settings are at the top. Settings apply when starting a new run.
 
-Default settings: persistent HP, 20 player HP, Scrap enabled, +1 Attack every turn. Monster HP starts at printed Threat; Attack starts at max(1, Threat − 2). Damage persists without lowering Attack. Perfect requires exactly the remaining HP on the killing turn. Only Attack escalates. In classic mode, Threat remains both the kill threshold and attack strength.
+Leave Shuffle seed blank for a new random seed each run. Enter a specific seed to repeat a shuffle with the same settings and game version. Test settings shows the current run’s seed, including on mobile; exports also retain it.
+
+Default settings: random seed, persistent HP, 20 player HP, Scrap enabled, +1 Attack every turn. Monster HP starts at printed Threat; Attack starts at max(1, Threat − 2). Damage persists without lowering Attack. Perfect requires exactly the remaining HP on the killing turn. Only Attack escalates. In classic mode, Threat remains both the kill threshold and attack strength.
 
 Every-other-turn escalation happens after turns 2, 4, 6, etc. Player maximum HP is 20, or starting HP if higher. Exports include all settings and the combat model.
 
@@ -72,6 +74,7 @@ An optional read-only WebMCP tool exposes visible board information in supportin
 ## Verification and source
 
 - `npm test`: 45 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `node scripts/verify-seeds.mjs`: random initial/restarted seeds and repeatable manual seeds on desktop and mobile.
 - `node scripts/verify-qol.mjs`: desktop/mobile checks for one-tap Heal/Block, undo, the HP forecast, Scrap interactions and resolved HP. Supports `DUNGEON_ROW_URL` for hosted checks.
 - `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for independent loot choices, changing a Perfect into an overkill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.
 - `node scripts/verify-mobile.mjs`: phone layouts at 320, 390 and 430 pixels, landscape, menu/details, layout switching, a full mobile run, fixed turn controls, and exports. Uses the same Playwright setup below.

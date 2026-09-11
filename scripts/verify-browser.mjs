@@ -14,7 +14,7 @@ page.on('response',response=>{if(response.status()>=400)errors.push(`HTTP ${resp
 const url='http://127.0.0.1:4173';
 const token=i=>page.locator('[data-effect]').nth(i);
 async function fresh(settings={}){
-  await page.goto(url);await page.locator('[data-effect]').first().waitFor();
+  await page.goto(url);await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});await page.locator('[data-effect]').first().waitFor();
   {
     await page.getByRole('button',{name:'Test settings',exact:true}).click();
     await page.locator('#combat-model').selectOption(settings.combatModel||'classic');
@@ -35,7 +35,7 @@ async function dragMouse(source,target){
   await page.waitForTimeout(380);
 }
 try{
-  await page.goto(url);await page.locator('[data-effect]').first().waitFor();
+  await page.goto(url);await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});await page.locator('[data-effect]').first().waitFor();
   assert.match(await page.locator('h1').innerText(),/HP/);
   assert.match(await page.locator('.monster').first().getAttribute('aria-label'),/5 of 5 HP, Attack 3/);
   await page.screenshot({path:'tmp/qa/hp-desktop.png',fullPage:true});
@@ -134,7 +134,7 @@ try{
 
   const mobile=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:1});
   mobile.on('pageerror',e=>errors.push(e.message));
-  await mobile.goto(url);await mobile.locator('[data-effect]').first().waitFor();
+  await mobile.goto(url);await mobile.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});await mobile.locator('[data-effect]').first().waitFor();
   assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await mobile.screenshot({path:'tmp/qa/hp-mobile.png',fullPage:true});
   await mobile.locator('.card-scrap').first().tap();assert.equal(await mobile.locator('.hand-card.scrapped').count(),1);

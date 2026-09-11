@@ -14,7 +14,7 @@ try{
     const token=i=>page.locator('[data-effect]').nth(i);
     const monster=i=>page.locator('.monster').nth(i);
     const option=(i,choice)=>page.locator('.monster-slot').nth(i).locator(`[data-loot-choice="${choice}"]`);
-    await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');
+    await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});
     await click(token(0));await click(monster(1));
     await click(token(1));await click(monster(2));
     assert.equal(await page.locator('.loot-options').count(),2);

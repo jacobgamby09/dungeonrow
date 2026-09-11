@@ -113,3 +113,4 @@ dialog::backdrop{background:#000a}
   .health-summary .hp-caption{font-size:.625rem}.health-summary .hp-projection{gap:0}
   .stats-right{gap:10px}.stats-right .stat small{max-width:85px}
 }
+#current-seed{overflow-wrap:anywhere}

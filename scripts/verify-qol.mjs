@@ -9,7 +9,7 @@ try{
   const click=async l=>mobile?l.tap():l.click();
   const end=()=>click(page.locator(mobile?'#mobile-end-turn':'#end-turn'));
   const predicted=()=>page.locator('.hp-projection strong').innerText();
-  await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');
+  await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});
   assert.equal(await predicted(),'17');await end();await click(page.locator('[data-choice="endure"]'));
   const block=()=>page.locator('.token.effect-block').first();
   await click(block());assert.equal(await block().getAttribute('aria-pressed'),'true');

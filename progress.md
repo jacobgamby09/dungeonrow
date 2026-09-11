@@ -2,6 +2,12 @@
 
 Loggen følger ændringer i prototype, regler og udgivelse. Automatiske kontroller er teknisk verifikation, ikke menneskelige spiltests.
 
+## v0.5.1 — tilfældige seeds som standard · 11. september 2026
+
+- Spillet får et tilfældigt seed, når siden åbnes. Nye runs får også et nyt seed, når seed-feltet er tomt.
+- Et indtastet seed bevares til gentagelige tests. Det aktuelle seed vises i testindstillingerne på både mobil og desktop og følger fortsat med i eksporten.
+- Kontrolleret: forskellige seeds ved nye runs og genindlæsning, tomt felt/mellemrum samt identiske startboards ved genbrug af samme seed. Heal/Block- og HP-prognosekontrollen er også bestået.
+
 ## v0.5.0 — ét klik på Heal/Block og HP-prognose · 11. september 2026
 
 - Heal og Block aktiveres direkte på spilleren med ét klik eller tryk. Et nyt klik deaktiverer effekten. Attack tildeles fortsat et monster.

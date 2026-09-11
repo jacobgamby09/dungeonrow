@@ -2,7 +2,8 @@ import {createGame,assign,choosePerfectLoot,scrap,resetAssignments,preview,resol
 import {LABELS,SYMBOLS,effectText,upgradedEffects,VERSION} from './data.mjs';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let game=createGame({combatModel:'persistent-hp'}),selected=null,selectedCard=null,suppressClickUntil=0;
+const randomSeed=()=>crypto.randomUUID();
+let game=createGame({seed:randomSeed(),combatModel:'persistent-hp'}),selected=null,selectedCard=null,suppressClickUntil=0;
 const effectsHTML=effects=>effects.map(e=>`<span class="effect-${e.type}">${SYMBOLS[e.type]} ${LABELS[e.type]} ${e.value}</span>`).join('');
 const HEART='<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
 const SWORD='<svg class="stat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 16 12-12v5L11 18M6 13l5 5M8 16l-4 4M3 18l3 3"/></svg>';
@@ -112,6 +113,7 @@ function render(){
   $('log-count').textContent=`${game.history.length} completed turns`;
   $('history-list').innerHTML=game.history.map(t=>`<div class="log-entry"><strong>Turn ${t.turn}</strong> · ${t.start.hp} → ${t.end.hp} HP · ${t.kills.map(k=>`${k.monster.name}${k.perfect?' ★':''}${k.lootDecision==='skip'?' (loot skipped)':''}`).join(', ')||'no kills'} · ${t.decision==='boss-stays'?'boss stays automatically':t.decision} ${t.scrap?'· Scrap: '+t.scrap.name:''}</div>`).join('')||'<p class="fine">No completed turns yet.</p>';
   $('seed-label').textContent=`Seed: ${game.settings.seed} · v${VERSION}`;
+  $('current-seed').textContent=game.settings.seed;
   $('build-label').textContent=`v${VERSION} · ${persistent?'HP + ATK TEST':'CLASSIC THREAT'}`;
   $('rules-turns').innerHTML=`<li>Draw 4 cards. Assign the effects you want to use.</li><li>Heal resolves first. ${persistent?'Attack reduces monster HP; wounds persist between turns. At 0 HP, the monster dies. Dealing exactly its remaining HP on the killing turn earns a choice: take upgraded loot or skip it.':'Attack equal to or above Threat kills; an exact match earns a choice: take upgraded loot or skip it. Insufficient Attack has no effect.'} Normal kills always give loot. Skip at most one Perfect reward per turn. Move skip here transfers that choice; other Perfects give upgraded loot. Take loot is selected by default. Taken loot goes to discard.</li><li>The surviving enemy with the highest ${pressure} attacks. Ties go to the leftmost enemy. Block reduces damage.${persistent?' Losing HP does not lower Attack.':''}</li><li>Choose Endure: remove the attacker without loot. Or Leave: keep it${persistent?' with its remaining HP':''}.</li><li>Survivors gain +1 ${pressure}${game.settings.escalation===2?' after even turns':''}.${persistent?' HP does not increase.':''} Empty slots refill. Discard your hand.</li>`;
   $('rules-model').textContent=persistent?'HP starts at printed Threat. Attack starts at max(1, Threat − 2). Boss stages follow the same model; each new stage enters with full HP and fresh Attack.':'Classic v1.3: Threat is both the kill threshold and attack strength. Monster wounds do not persist.';
@@ -170,7 +172,7 @@ $('board').addEventListener('click',event=>{
 });
 for(const [button,panel]of [['rules-toggle','rules'],['test-toggle','test-panel']])$(button).addEventListener('click',()=>{$(panel).hidden=!$(panel).hidden;$(button).setAttribute('aria-expanded',String(!$(panel).hidden));});
 $('new-run').addEventListener('submit',event=>{event.preventDefault();act(()=>{
-  game=createGame({seed:$('seed').value.trim(),startHP:Number($('start-hp').value),escalation:Number($('escalation').value),combatModel:$('combat-model').value});
+  game=createGame({seed:$('seed').value.trim()||randomSeed(),startHP:Number($('start-hp').value),escalation:Number($('escalation').value),combatModel:$('combat-model').value});
   selected=null;selectedCard=null;clearNotes();$('run-notes').value='';$('test-panel').hidden=true;$('test-toggle').setAttribute('aria-expanded','false');$('mobile-menu').close();announce('New run started.');
 });});
 function download(format){

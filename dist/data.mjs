@@ -1,4 +1,4 @@
-export const VERSION = '0.5.0';
+export const VERSION = '0.5.1';
 export const GDD = '1.6-classic-single-skip-test';
 export const HP_RULESET = '1.6-hp-atk-single-skip-test';
 const effects = (...pairs) => pairs.map(([type, value]) => ({ type, value }));

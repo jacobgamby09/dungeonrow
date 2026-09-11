@@ -21,7 +21,7 @@ async function download(){
   return JSON.parse(await readFile('tmp/qa/mobile-run.json','utf8'));
 }
 try{
-  await page.goto(url);await page.locator('#mobile-end-turn').waitFor();
+  await page.goto(url);await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});await page.locator('#mobile-end-turn').waitFor();
   assert.equal(await page.locator('.scrap-target').isVisible(),false);
   assert.equal(await page.locator('.notebook').isVisible(),false);
   assert.ok(await page.evaluate(()=>document.querySelector('.hand').getBoundingClientRect().bottom<=document.querySelector('.mobile-turnbar').getBoundingClientRect().top),'Hand and dock fit on a 390 × 844 screen');
@@ -70,7 +70,7 @@ try{
   }
   checks.push('320px and 430px phones plus landscape: no horizontal overflow; hand scrolls clear of the dock');
 
-  await page.setViewportSize({width:390,height:844});await page.goto(url);
+  await page.setViewportSize({width:390,height:844});await page.goto(url);await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});
   const expected=createGame({combatModel:'persistent-hp'});let safety=0;
   while(expected.phase!=='finished'&&safety++<100){
     const strongest=expected.row.filter(Boolean).reduce((a,b)=>a.atk>=b.atk?a:b);
