@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,makeCard,makeMonster,beginTurn,refill,assign,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV} from '../dist/engine.mjs';
+import {createGame,makeCard,makeMonster,beginTurn,refill,assign,choosePerfectLoot,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV} from '../dist/engine.mjs';
 import {MONSTERS} from '../dist/data.mjs';
 const e=(type,value)=>({type,value});
 function fixture(names=['goblin','slime','guard','skeleton'],cards=[[e('attack',3)],[e('attack',2)],[e('attack',1),e('attack',1)],[e('block',3)]],opts={}){
@@ -9,6 +9,47 @@ function fixture(names=['goblin','slime','guard','skeleton'],cards=[[e('attack',
   g.hand=cards.map((es,i)=>makeCard(g,`Test ${i}`,es));g.draw=[];g.discard=[];beginTurn(g);return g;
 }
 const a=(g,c,i,slot)=>assign(g,g.hand[c].id,i,slot==='self'?'self':g.row[slot].id);
+test('multiple Perfects choose independently while overkill loot is mandatory',()=>{
+  for(const combatModel of ['classic','persistent-hp']){
+    const g=fixture(['rat','rat','bat'],[[e('attack',2)],[e('attack',2)],[e('attack',4)],[e('block',3)]],{combatModel});
+    a(g,0,0,0);a(g,1,0,1);a(g,2,0,2);
+    choosePerfectLoot(g,'test0','skip');choosePerfectLoot(g,'test1','take');
+    assert.throws(()=>choosePerfectLoot(g,'test2','skip'));
+    assert.equal(exportRun(g).current.lootChoices.test0,'skip');
+    resolve(g);const kills=g.history[0].kills;
+    assert.deepEqual(kills.map(k=>k.lootDecision),['skip','take','mandatory']);
+    assert.equal(kills[0].loot,null);assert.equal(kills[1].loot.effects[0].value,2);
+    assert.equal(kills[2].loot.upgraded,false);assert.equal(deck(g).length,6);
+    assert.ok(exportCSV(g).includes('loot_choices'));assert.ok(exportCSV(g).includes('skip'));
+  }
+});
+test('invalidating a Perfect clears its choice; reassigning and reset default to take',()=>{
+  const g=fixture(['rat','guard'],[[e('attack',2)],[e('attack',1)]]);
+  a(g,0,0,0);choosePerfectLoot(g,'test0','skip');a(g,1,0,0);
+  assert.deepEqual(g.lootChoices,{});
+  assign(g,g.hand[1].id,0,null);choosePerfectLoot(g,'test0','skip');
+  resetAssignments(g);assert.deepEqual(g.lootChoices,{});
+  a(g,0,0,0);resolve(g);assert.equal(g.current.kills[0].lootDecision,'take');
+  assert.throws(()=>choosePerfectLoot(g,'test0','skip'));
+});
+test('Scrapping an attacking card invalidates its Perfect loot choice',()=>{
+  const g=fixture(['rat'],[[e('attack',2)],[e('block',3)]]);
+  a(g,0,0,0);choosePerfectLoot(g,'test0','skip');scrap(g,g.hand[0].id);
+  assert.deepEqual(g.lootChoices,{});assert.equal(preview(g).kills.length,0);
+});
+test('wounded Perfects may skip loot and death still resolves immediately',()=>{
+  const g=fixture(['guard','troll'],[[e('attack',2)]],{combatModel:'persistent-hp'});
+  g.row[0].hp=2;g.hp=1;a(g,0,0,0);choosePerfectLoot(g,'test0','skip');resolve(g);
+  assert.equal(g.result,'lost');assert.equal(g.phase,'finished');
+  assert.equal(g.history[0].kills[0].perfect,true);assert.equal(g.history[0].kills[0].loot,null);
+  assert.equal(g.history[0].kills[0].lootDecision,'skip');
+});
+test('bosses and non-kills never allow a loot choice',()=>{
+  const g=fixture(['rat'],[[e('attack',8)]]);assert.throws(()=>choosePerfectLoot(g,'test0','skip'));
+  boss(g);a(g,0,0,0);assert.throws(()=>choosePerfectLoot(g,'boss1','skip'));
+  resolve(g);assert.equal(g.history[0].kills[0].lootDecision,'none');
+  assert.equal(g.row[0].stage,2);
+});
 function boss(g,stage=1,slot=0){g.row[slot]={id:`boss${stage}`,name:'Gravekeeper',boss:true,stage,threat:[8,11,14][stage-1],floor:4,effects:[]};g.bossSpawned=true;g.dungeon=[];beginTurn(g);}
 test('setup: 10 cards, 25 monsters, four occupied slots, floor bands and repeatable seed',()=>{
   const g=createGame(),h=createGame();assert.equal(deck(g).length,10);assert.equal(g.hand.length,4);assert.equal(g.dungeon.length,21);
@@ -100,7 +141,7 @@ test('every-other-turn escalation happens after turns 2,4,...',()=>{
 });
 test('JSON and CSV export contain turn choices, settings, observations and final deck',()=>{
   const g=fixture();resolve(g,{loot:'"Dagger", ønsket\nmen ikke valgt',intentionalPerfects:'ingen'});choose(g,'endure');const out=exportRun(g,'run-note');
-  assert.equal(out.turns[0].decision,'endure');assert.equal(out.gdd,'1.3');assert.equal(out.finalDeck.length,4);assert.equal(out.current.turn,2);assert.equal(out.runNotes,'run-note');
+  assert.equal(out.turns[0].decision,'endure');assert.equal(out.gdd,'1.5-classic-perfect-loot-test');assert.equal(out.finalDeck.length,4);assert.equal(out.current.turn,2);assert.equal(out.runNotes,'run-note');
   assert.ok(exportCSV(g).includes('intentionalPerfects'));assert.ok(exportCSV(g).includes('scrap_enabled'));out.finalDeck.length=0;assert.equal(deck(g).length,4);
 });
 test('deterministic replay uses identical seed, settings and actions',()=>{
@@ -123,7 +164,7 @@ test('100 automated smoke runs finish without corrupting cards, row or logs',()=
 const hpFixture=(names=['guard'],cards=[[e('attack',3)],[e('attack',2)]],opts={})=>fixture(names,cards,{combatModel:'persistent-hp',...opts});
 test('HP model starts with separate HP/ATK, while keeping the same seed and card order',()=>{
   const g=createGame({combatModel:'persistent-hp'}),classic=createGame();
-  assert.equal(g.gdd,'1.4-hp-atk-test');assert.deepEqual(g.hand,classic.hand);
+  assert.equal(g.gdd,'1.5-hp-atk-perfect-loot-test');assert.deepEqual(g.hand,classic.hand);
   for(const m of [...g.row,...g.dungeon]){assert.equal(m.hp,m.threat);assert.equal(m.maxHp,m.threat);assert.equal(m.atk,Math.max(1,m.threat-2));}
   assert.throws(()=>createGame({combatModel:'unknown'}));
 });
@@ -176,7 +217,7 @@ test('HP stage 3 wins immediately even with a lethal survivor',()=>{
 });
 test('HP model exports its ruleset, combat mode and wound data in JSON/CSV',()=>{
   const g=hpFixture();a(g,0,0,0);resolve(g);choose(g,'leave');const out=exportRun(g);
-  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.4-hp-atk-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
+  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.5-hp-atk-perfect-loot-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
   assert.ok(exportCSV(g).includes('combat_model'));assert.ok(exportCSV(g).includes('hpBefore'));assert.ok(exportCSV(g).includes('persistent-hp'));
 });
 test('100 HP smoke runs complete without negative survivor HP or losing wounds',()=>{

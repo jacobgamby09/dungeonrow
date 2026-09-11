@@ -1,0 +1,48 @@
+import {createRequire} from 'node:module';
+import {mkdir,readFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const req=createRequire(process.env.PLAYWRIGHT_PACKAGE || 'C:/Users/JacobGamby/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/package.json');
+const {chromium}=req('playwright');
+const browser=await chromium.launch({headless:true});const errors=[];
+await mkdir('tmp/qa',{recursive:true});
+try{
+  for(const mobile of [false,true]){
+    const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1280,height:1000},isMobile:mobile,hasTouch:mobile,acceptDownloads:true});
+    page.on('pageerror',e=>errors.push(e.message));
+    page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
+    const click=async locator=>mobile?locator.tap():locator.click();
+    const token=i=>page.locator('[data-effect]').nth(i);
+    const monster=i=>page.locator('.monster').nth(i);
+    const option=(i,choice)=>page.locator('.monster-slot').nth(i).locator(`[data-loot-choice="${choice}"]`);
+    await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');
+    await click(token(0));await click(monster(1));
+    await click(token(1));await click(monster(2));
+    assert.equal(await page.locator('.loot-options').count(),2);
+    await click(option(1,'skip'));assert.match(await monster(1).innerText(),/No loot will be added/);
+    await click(option(2,'skip'));await click(option(2,'take'));
+    assert.equal(await option(1,'skip').getAttribute('aria-pressed'),'true');
+    assert.equal(await option(2,'take').getAttribute('aria-pressed'),'true');
+    await click(token(2));await click(monster(1));
+    assert.equal(await page.locator('.monster-slot').nth(1).locator('.loot-options').count(),0);
+    await click(token(2));await click(token(2));
+    assert.equal(await option(1,'take').getAttribute('aria-pressed'),'true');
+    await click(option(1,'skip'));
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:`tmp/qa/perfect-loot-${mobile?'mobile':'desktop'}.png`,fullPage:true});
+    await click(page.locator(mobile?'#mobile-end-turn':'#end-turn'));
+    await click(page.locator('[data-choice="endure"]'));
+    if(mobile)await click(page.locator('#menu-toggle'));
+    await page.locator('#history-panel').evaluate(el=>el.open=true);
+    const pending=page.waitForEvent('download');await click(page.locator('#export-json'));
+    const file=await pending;const path=`tmp/qa/perfect-loot-${mobile?'mobile':'desktop'}.json`;await file.saveAs(path);
+    const run=JSON.parse(await readFile(path,'utf8'));
+    assert.equal(run.finalDeck.length,11);assert.equal(run.turns[0].kills.length,2);
+    assert.equal(run.turns[0].kills[0].monster.name,'Bat');
+    assert.equal(run.turns[0].kills[0].loot,null);assert.equal(run.turns[0].kills[0].lootDecision,'skip');
+    assert.equal(run.turns[0].kills[1].loot.effects[0].value,3);assert.equal(run.turns[0].kills[1].lootDecision,'take');
+    assert.match(await page.locator('#history-list').innerText(),/loot skipped/);
+    console.log(`${mobile?'Mobile':'Desktop'}: independent Perfect choices, undo, invalidation, resolve and export passed`);
+    await page.close();
+  }
+  assert.deepEqual(errors,[]);
+}finally{await browser.close();}

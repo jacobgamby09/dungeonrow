@@ -1,8 +1,14 @@
-# Dungeon Row — prototype 0.3.0
+# Dungeon Row — prototype 0.4.0
 
-A local, playable prototype with persistent monster HP and separate Attack. Classic GDD v1.3 is also available in Test settings. The HP variant is described in `Dungeon Row - GDD v1.4 testvariant.md`.
+A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current loot rules are described in `Dungeon Row - GDD v1.5 perfect loot.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
 
 The interface is in English. Version 0.2.1 gives monsters a heart and health bar, a separate orange sword/Attack field, a damage preview on the health bar, and a label identifying the attacker. Player health uses the same heart symbol. Version 0.2.2 makes Scrap standard, adds Scrap card / Undo Scrap buttons to each hand card, and labels the unrevealed-monster counter Mobs left in dungeon. Card values are unchanged.
+
+## Perfect loot choice — v0.4.0
+
+Each normal monster with a planned Perfect Kill offers **Take loot** (upgraded, selected by default) or **Skip loot** (no card). Choose independently for each monster before End Turn. Ordinary kills always add normal loot. Boss stages never give loot. Changing assignments so a kill is no longer Perfect resets that monster's loot choice.
+
+The turn log and JSON/CSV exports record skipped Perfect rewards separately from Scrap. Skipping loot prevents a new card from entering the deck; Scrap removes an existing card at the cost of its effects that turn.
 
 ## Mobile layout — v0.3.0
 
@@ -61,7 +67,8 @@ An optional read-only WebMCP tool exposes visible board information in supportin
 
 ## Verification and source
 
-- `npm test`: 39 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `npm test`: 44 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for independent loot choices, changing a Perfect into an overkill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.
 - `node scripts/verify-mobile.mjs`: phone layouts at 320, 390 and 430 pixels, landscape, menu/details, layout switching, a full mobile run, fixed turn controls, and exports. Uses the same Playwright setup below.
 - `node scripts/verify-browser.mjs`: browser checks for assignments, previews, undo, mouse/touch dragging, Scrap, complete runs in both models, exports, mobile layout, and 200% text size. Uses this computer's bundled Playwright; elsewhere set `PLAYWRIGHT_PACKAGE` to the installed Playwright package's `package.json`.
 - `scripts/build-print-pack.py`: regenerates the historical PDF pack from card data with ReportLab and Arial. Requires Python with `reportlab` and `pypdf`.

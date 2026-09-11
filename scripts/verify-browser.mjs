@@ -50,7 +50,7 @@ try{
   assert.ok((await page.locator('.monster').first().getAttribute('class')).includes('perfect'));
   await page.locator('#end-turn').click();await page.locator('[data-choice="endure"]').click();
   const hpRun=JSON.parse(await download('json'));
-  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.4-hp-atk-test');
+  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.5-hp-atk-perfect-loot-test');
   assert.equal(hpRun.turns[0].end.row[0].hp,2);assert.equal(hpRun.turns[1].kills[0].perfect,true);
   assert.ok((await download('csv')).includes('monster_damage'));
   checks.push('HP mode is default; preview is reversible, wound persists, ATK escalates, later exact HP gives Perfect, exports identify variant');

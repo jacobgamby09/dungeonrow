@@ -1,6 +1,13 @@
 /* One game state; a compact working surface on narrow screens. */
 .mobile-only{display:none}
-.monster-slot{display:contents}
+.monster-slot{display:flex;flex-direction:column;position:relative;min-width:0}
+.monster-slot>.monster{width:100%;flex:1}
+.loot-options{padding:7px;border:1px solid var(--gold);border-top:0;border-radius:0 0 5px 5px;background:var(--surface)}
+.loot-options>span{display:block;font-size:.75rem;color:var(--gold);margin-bottom:4px}
+.loot-options>div{display:flex;gap:5px}
+.loot-options button{flex:1;min-width:0;padding:5px;font-size:.8125rem;min-height:44px}
+.loot-options button[aria-pressed=true]{background:var(--gold);color:var(--bg);border-color:var(--gold);font-weight:600}
+.monster.loot-skipped .loot-name{text-decoration:line-through;color:var(--muted)}
 dialog{color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;width:min(560px,calc(100% - 24px));max-height:calc(100dvh - 32px);overflow:auto}
 dialog::backdrop{background:#000a}
 .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
