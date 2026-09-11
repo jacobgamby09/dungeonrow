@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#11191c">
+  <meta name="description" content="Dungeon Row: a playable deckbuilder prototype. Defeat monsters, claim their loot, and land exact kills for upgrades.">
+  <title>Dungeon Row · Prototype</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2311191c'/%3E%3Cpath d='M8 25V7h10l6 6v12h-7v-9h-4v9Z' fill='%23dcc27e'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="./" aria-label="Dungeon Row, start over"><span class="brand-mark">D<span>R</span></span><span>DUNGEON ROW<small id="build-label">v0.3.0 · HP + ATK TEST</small></span></a>
+      <nav aria-label="Help"><button id="rules-toggle" class="quiet" aria-expanded="false" aria-controls="rules">Rules</button><button id="test-toggle" class="quiet" aria-expanded="false" aria-controls="test-panel">Test settings</button></nav>
+      <button id="menu-toggle" class="mobile-only quiet" aria-haspopup="dialog">Menu</button>
+    </header>
+    <section id="rules" class="panel" hidden>
+      <h2>Every enemy is your next card.</h2>
+      <p>Click an effect in your hand, then a monster (Attack) or your HP (Block / Heal). Move or remove assignments freely before ending the turn.</p>
+      <ol id="rules-turns"></ol>
+      <p id="rules-model"></p>
+      <p>You cannot Endure a boss. The next stage enters during refill and cannot attack until the following turn. Defeat Stage 3 to win immediately. At 0 HP or below, your run ends immediately.</p>
+    </section>
+    <section id="test-panel" class="panel" hidden>
+      <h2>Start a test run</h2>
+      <p>Settings apply to the next run. Starting replaces the current run; export it first if you want to keep it.</p>
+      <form id="new-run" class="settings">
+        <label>Combat model<select id="combat-model"><option value="persistent-hp">Persistent HP + separate Attack</option><option value="classic">Classic Threat (GDD 1.3)</option></select></label>
+        <label>Shuffle seed<input id="seed" value="dungeon-01" maxlength="80" required></label>
+        <label>Starting HP<input id="start-hp" type="number" min="1" max="40" value="20" required></label>
+        <label>Escalation<select id="escalation"><option value="1">+1 every turn</option><option value="2">+1 every other turn</option></select></label>
+        <button type="submit" class="primary">Start run</button>
+      </form>
+      <p class="fine">Maximum HP is 20, or starting HP if higher. Every-other-turn escalation happens after turns 2, 4, 6 …</p>
+    </section>
+    <main id="board" aria-label="Game board"></main>
+    <div id="message" role="status" aria-live="polite"></div>
+    <section class="notebook">
+      <details id="deck-panel"><summary>Your deck <span id="deck-count"></span></summary><div id="deck-list"></div></details>
+      <details id="observer-panel"><summary>Observer notes <span>optional</span></summary>
+        <p>Complete before End Turn. The game records outcomes; use these notes for what the player said and planned.</p>
+        <div class="note-grid">
+          <label>Desired loot / did it change the decision?<textarea id="loot-note" rows="2" placeholder="Player’s own words"></textarea></label>
+          <label>Two options considered / plan for Leave<textarea id="lines-note" rows="2" placeholder="Which options were considered?"></textarea></label>
+          <label>Intentionally planned Perfects<textarea id="perfect-note" rows="2" placeholder="Monster name; blank = not recorded"></textarea></label>
+        </div>
+      </details>
+      <details id="history-panel"><summary>Run log and export <span id="log-count"></span></summary>
+        <div id="history-list"></div>
+        <label>Run notes<textarea id="run-notes" rows="2" placeholder="Desired monsters, interesting choices, boredom …"></textarea></label>
+        <div class="export-actions"><button id="export-json">Export JSON</button><button id="export-csv">Export CSV</button></div>
+        <p class="fine">JSON includes any unfinished turn and the final deck. CSV has one row per completed turn. Runs are not saved automatically when the page closes.</p>
+      </details>
+    </section>
+    <footer><span>15 monsters · 3 floors · 1 Gravekeeper</span><span id="seed-label"></span></footer>
+  </div>
+  <dialog id="mobile-menu" aria-labelledby="menu-title">
+    <div class="dialog-head"><h2 id="menu-title">Game menu</h2><button data-close-dialog aria-label="Close menu">Close</button></div>
+    <div class="menu-links"><button data-open-panel="rules">Rules</button><button data-open-panel="test-panel">Test settings</button></div>
+    <div id="menu-content"></div>
+  </dialog>
+  <dialog id="monster-details" aria-labelledby="monster-details-title">
+    <div class="dialog-head"><h2 id="monster-details-title"></h2><button data-close-dialog aria-label="Close monster details">Close</button></div>
+    <div id="monster-details-content"></div>
+  </dialog>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>
