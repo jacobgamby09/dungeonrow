@@ -1,12 +1,16 @@
-# Dungeon Row — prototype 0.4.0
+# Dungeon Row — prototype 0.5.0
 
-A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current loot rules are described in `Dungeon Row - GDD v1.5 perfect loot.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
+A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.6 single skip.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
 
 The interface is in English. Version 0.2.1 gives monsters a heart and health bar, a separate orange sword/Attack field, a damage preview on the health bar, and a label identifying the attacker. Player health uses the same heart symbol. Version 0.2.2 makes Scrap standard, adds Scrap card / Undo Scrap buttons to each hand card, and labels the unrevealed-monster counter Mobs left in dungeon. Card values are unchanged.
 
-## Perfect loot choice — v0.4.0
+## One-tap support effects and HP forecast — v0.5.0
 
-Each normal monster with a planned Perfect Kill offers **Take loot** (upgraded, selected by default) or **Skip loot** (no card). Choose independently for each monster before End Turn. Ordinary kills always add normal loot. Boss stages never give loot. Changing assignments so a kill is no longer Perfect resets that monster's loot choice.
+Heal and Block activate on yourself immediately when clicked; click again to deactivate. The health panel shows current HP → projected HP after End Turn, with actual healing and damage (or All damage blocked). It respects maximum HP and updates with assignments, kills, Scrap and reset. `progress.md` tracks rule and interface changes.
+
+## Perfect loot choice — updated in v0.5.0
+
+Each normal monster with a planned Perfect Kill offers **Take loot** (upgraded, selected by default) or **Skip loot** (no card). Skip at most one reward per turn. Move skip here transfers that choice; other Perfects give upgraded loot. Ordinary kills always add normal loot. Boss stages never give loot. Changing assignments so a kill is no longer Perfect resets that monster's loot choice.
 
 The turn log and JSON/CSV exports record skipped Perfect rewards separately from Scrap. Skipping loot prevents a new card from entering the deck; Scrap removes an existing card at the cost of its effects that turn.
 
@@ -28,7 +32,7 @@ Export an active run before refreshing to load an update. Runs are not saved aut
 
 ## How to play
 
-- Click or tap an effect, then a monster for Attack or your health for Block/Heal. You can also drag effects to their targets.
+- Click or tap Heal/Block to toggle it on yourself. For Attack, select an effect and then a monster. You can also drag effects to their targets.
 - Select an assigned effect and choose another target to move it. Click the selected effect again to unassign it. Reset assignments clears all assignments.
 - Monster health bars preview damage. An exact kill shows Perfect loot; the highlighted Attack field identifies the enemy that will attack. The line below the row forecasts healing, Block, damage, and your resulting HP.
 - Press End Turn. After a normal enemy attacks, choose Endure to remove it without loot or Leave to keep it.
@@ -67,7 +71,8 @@ An optional read-only WebMCP tool exposes visible board information in supportin
 
 ## Verification and source
 
-- `npm test`: 44 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `npm test`: 45 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `node scripts/verify-qol.mjs`: desktop/mobile checks for one-tap Heal/Block, undo, the HP forecast, Scrap interactions and resolved HP. Supports `DUNGEON_ROW_URL` for hosted checks.
 - `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for independent loot choices, changing a Perfect into an overkill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.
 - `node scripts/verify-mobile.mjs`: phone layouts at 320, 390 and 430 pixels, landscape, menu/details, layout switching, a full mobile run, fixed turn controls, and exports. Uses the same Playwright setup below.
 - `node scripts/verify-browser.mjs`: browser checks for assignments, previews, undo, mouse/touch dragging, Scrap, complete runs in both models, exports, mobile layout, and 200% text size. Uses this computer's bundled Playwright; elsewhere set `PLAYWRIGHT_PACKAGE` to the installed Playwright package's `package.json`.

@@ -124,6 +124,7 @@ export function choosePerfectLoot(state,monsterId,decision){
   require(state.phase==='planning','Loot choices are locked.');
   require(['take','skip'].includes(decision),'Choose Take loot or Skip loot.');
   require(eligiblePerfectLoot(state).some(m=>m.id===monsterId),'Only a Perfect Kill lets you skip loot.');
+  if(decision==='skip')for(const id of Object.keys(state.lootChoices))if(state.lootChoices[id]==='skip')state.lootChoices[id]='take';
   state.lootChoices[monsterId]=decision;state.current.moves++;
 }
 export function preview(state) {

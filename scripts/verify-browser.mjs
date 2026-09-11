@@ -50,7 +50,7 @@ try{
   assert.ok((await page.locator('.monster').first().getAttribute('class')).includes('perfect'));
   await page.locator('#end-turn').click();await page.locator('[data-choice="endure"]').click();
   const hpRun=JSON.parse(await download('json'));
-  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.5-hp-atk-perfect-loot-test');
+  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.6-hp-atk-single-skip-test');
   assert.equal(hpRun.turns[0].end.row[0].hp,2);assert.equal(hpRun.turns[1].kills[0].perfect,true);
   assert.ok((await download('csv')).includes('monster_damage'));
   checks.push('HP mode is default; preview is reversible, wound persists, ATK escalates, later exact HP gives Perfect, exports identify variant');
@@ -99,7 +99,7 @@ try{
     const strongest=expected.row.filter(Boolean).reduce((a,b)=>a.threat>=b.threat?a:b);
     for(const card of expected.hand)for(let i=0;i<card.effects.length;i++){
       const target=card.effects[i].type==='attack'?strongest.id:'self';
-      await page.locator(`[data-effect="${card.id}:${i}"]`).click();await page.locator(`[data-target="${target}"]`).click();assign(expected,card.id,i,target);
+      await page.locator(`[data-effect="${card.id}:${i}"]`).click();if(target!=='self')await page.locator(`[data-target="${target}"]`).click();assign(expected,card.id,i,target);
     }
     await page.locator('#end-turn').click();resolve(expected);
     if(expected.phase==='choice'){await page.locator('[data-choice="endure"]').click();choose(expected,'endure');}
@@ -122,7 +122,7 @@ try{
     const strongest=hpGame.row.filter(Boolean).reduce((a,b)=>a.atk>=b.atk?a:b);
     for(const c of hpGame.hand)for(let i=0;i<c.effects.length;i++){
       const target=c.effects[i].type==='attack'?strongest.id:'self';
-      await page.locator(`[data-effect="${c.id}:${i}"]`).click();await page.locator(`[data-target="${target}"]`).click();assign(hpGame,c.id,i,target);
+      await page.locator(`[data-effect="${c.id}:${i}"]`).click();if(target!=='self')await page.locator(`[data-target="${target}"]`).click();assign(hpGame,c.id,i,target);
     }
     await page.locator('#end-turn').click();resolve(hpGame);
     if(hpGame.phase==='choice'){const decision=hpGame.turn%2?'leave':'endure';await page.locator(`[data-choice="${decision}"]`).click();choose(hpGame,decision);}

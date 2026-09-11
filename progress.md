@@ -2,6 +2,14 @@
 
 Loggen følger ændringer i prototype, regler og udgivelse. Automatiske kontroller er teknisk verifikation, ikke menneskelige spiltests.
 
+## v0.5.0 — ét klik på Heal/Block og HP-prognose · 11. september 2026
+
+- Heal og Block aktiveres direkte på spilleren med ét klik eller tryk. Et nyt klik deaktiverer effekten. Attack tildeles fortsat et monster.
+- HP-feltet viser nu aktuelt liv → forventet liv efter turen samt faktisk healing, indgående skade eller **All damage blocked**. Prognosen opdateres også ved ændret Attack, reset og Scrap og respekterer max-HP.
+- Balanceeksperiment: Højst én Perfect-belønning kan skippes per tur. **Move skip here** flytter valget til et andet monster; den tidligere belønning skifter til Take loot. Andre Perfect Kills giver opgraderet loot.
+- Regelsæt v1.6 skelner disse runs fra v1.5 med ubegrænset skip.
+- Verifikation: 45 regeltests og målrettede desktop-/mobilkontroller af aktivering, deaktivering, HP-prognose, Scrap, ét loot-skip og eksport bestået.
+
 ## v0.4.0 — Perfect loot-valg · 11. september 2026
 
 - Et Perfect Kill giver valget mellem opgraderet loot og ingen loot. Almindelige kills giver fortsat normal loot automatisk.

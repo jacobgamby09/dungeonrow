@@ -1,6 +1,6 @@
-export const VERSION = '0.4.0';
-export const GDD = '1.5-classic-perfect-loot-test';
-export const HP_RULESET = '1.5-hp-atk-perfect-loot-test';
+export const VERSION = '0.5.0';
+export const GDD = '1.6-classic-single-skip-test';
+export const HP_RULESET = '1.6-hp-atk-single-skip-test';
 const effects = (...pairs) => pairs.map(([type, value]) => ({ type, value }));
 export const STARTER = [
   { name: 'Rusty Strike', count: 3, effects: effects(['attack', 2]) },

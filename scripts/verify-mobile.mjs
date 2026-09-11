@@ -77,8 +77,8 @@ try{
     for(const c of expected.hand)for(let i=0;i<c.effects.length;i++){
       const target=c.effects[i].type==='attack'?strongest.id:'self';
       await page.locator(`[data-effect="${c.id}:${i}"]`).tap();
-      assert.equal(await page.locator('#board').getAttribute('data-selection'),c.effects[i].type);
-      await page.locator(`[data-target="${target}"]`).tap();assign(expected,c.id,i,target);
+      assert.equal(await page.locator('#board').getAttribute('data-selection'),c.effects[i].type==='attack'?'attack':'');
+      if(target!=='self')await page.locator(`[data-target="${target}"]`).tap();assign(expected,c.id,i,target);
     }
     await page.locator('#mobile-end-turn').tap();resolve(expected);
     if(expected.phase==='choice'){

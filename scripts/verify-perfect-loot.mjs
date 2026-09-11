@@ -19,7 +19,9 @@ try{
     await click(token(1));await click(monster(2));
     assert.equal(await page.locator('.loot-options').count(),2);
     await click(option(1,'skip'));assert.match(await monster(1).innerText(),/No loot will be added/);
-    await click(option(2,'skip'));await click(option(2,'take'));
+    await click(option(2,'skip'));
+    assert.equal(await option(1,'take').getAttribute('aria-pressed'),'true');
+    await click(option(1,'skip'));
     assert.equal(await option(1,'skip').getAttribute('aria-pressed'),'true');
     assert.equal(await option(2,'take').getAttribute('aria-pressed'),'true');
     await click(token(2));await click(monster(1));
