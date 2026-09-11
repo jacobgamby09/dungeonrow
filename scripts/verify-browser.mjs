@@ -47,13 +47,14 @@ try{
   await page.locator('[data-choice="leave"]').click();
   assert.match(await page.locator('.monster').first().getAttribute('aria-label'),/2 of 5 HP, Attack 4/);
   await page.getByRole('button',{name:'Rusty Strike, Attack 2, effect 1',exact:true}).click();await page.locator('.monster').first().click();
-  assert.ok((await page.locator('.monster').first().getAttribute('class')).includes('perfect'));
+  assert.ok(!(await page.locator('.monster').first().getAttribute('class')).includes('perfect'));
+  assert.equal(await page.locator('.monster-slot').first().locator('.loot-options').count(),0);
   await page.locator('#end-turn').click();await page.locator('[data-choice="endure"]').click();
   const hpRun=JSON.parse(await download('json'));
-  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.6-hp-atk-single-skip-test');
-  assert.equal(hpRun.turns[0].end.row[0].hp,2);assert.equal(hpRun.turns[1].kills[0].perfect,true);
+  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.7-hp-atk-one-shot-test');
+  assert.equal(hpRun.turns[0].end.row[0].hp,2);assert.equal(hpRun.turns[1].kills[0].oneShot,false);assert.equal(hpRun.turns[1].kills[0].loot.upgraded,false);
   assert.ok((await download('csv')).includes('monster_damage'));
-  checks.push('HP mode is default; preview is reversible, wound persists, ATK escalates, later exact HP gives Perfect, exports identify variant');
+  checks.push('HP mode is default; preview is reversible, wound persists, ATK escalates, later exact HP gives normal loot, exports identify variant');
   await fresh();assert.equal(await page.locator('.monster').count(),4);assert.equal(await page.locator('.hand-card').count(),4);
   await page.screenshot({path:'tmp/qa/desktop.png',fullPage:true});checks.push('desktop rendering');
   await token(0).click();await page.locator('.monster').nth(0).click();

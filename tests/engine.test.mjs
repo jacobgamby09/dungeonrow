@@ -16,17 +16,18 @@ test('only one Perfect reward can be skipped; choosing another transfers the ski
   resolve(g);assert.deepEqual(g.history[0].kills.map(k=>k.lootDecision),['take','skip']);
   assert.equal(g.history[0].kills.filter(k=>k.loot).length,1);
 });
-test('multiple Perfects choose independently while overkill loot is mandatory',()=>{
+test('multiple reward kills share one skip; full-health overkill upgrades only in HP mode',()=>{
   for(const combatModel of ['classic','persistent-hp']){
     const g=fixture(['rat','rat','bat'],[[e('attack',2)],[e('attack',2)],[e('attack',4)],[e('block',3)]],{combatModel});
     a(g,0,0,0);a(g,1,0,1);a(g,2,0,2);
     choosePerfectLoot(g,'test0','skip');choosePerfectLoot(g,'test1','take');
-    assert.throws(()=>choosePerfectLoot(g,'test2','skip'));
+    if(combatModel==='classic')assert.throws(()=>choosePerfectLoot(g,'test2','skip'));
+    else choosePerfectLoot(g,'test2','take');
     assert.equal(exportRun(g).current.lootChoices.test0,'skip');
     resolve(g);const kills=g.history[0].kills;
-    assert.deepEqual(kills.map(k=>k.lootDecision),['skip','take','mandatory']);
+    assert.deepEqual(kills.map(k=>k.lootDecision),['skip','take',combatModel==='classic'?'mandatory':'take']);
     assert.equal(kills[0].loot,null);assert.equal(kills[1].loot.effects[0].value,2);
-    assert.equal(kills[2].loot.upgraded,false);assert.equal(deck(g).length,6);
+    assert.equal(kills[2].loot.upgraded,combatModel==='persistent-hp');assert.equal(deck(g).length,6);
     assert.ok(exportCSV(g).includes('loot_choices'));assert.ok(exportCSV(g).includes('skip'));
   }
 });
@@ -44,12 +45,12 @@ test('Scrapping an attacking card invalidates its Perfect loot choice',()=>{
   a(g,0,0,0);choosePerfectLoot(g,'test0','skip');scrap(g,g.hand[0].id);
   assert.deepEqual(g.lootChoices,{});assert.equal(preview(g).kills.length,0);
 });
-test('wounded Perfects may skip loot and death still resolves immediately',()=>{
+test('wounded exact kills cannot skip loot and death still resolves immediately',()=>{
   const g=fixture(['guard','troll'],[[e('attack',2)]],{combatModel:'persistent-hp'});
-  g.row[0].hp=2;g.hp=1;a(g,0,0,0);choosePerfectLoot(g,'test0','skip');resolve(g);
+  g.row[0].hp=2;g.hp=1;a(g,0,0,0);assert.throws(()=>choosePerfectLoot(g,'test0','skip'),/One-shot/);resolve(g);
   assert.equal(g.result,'lost');assert.equal(g.phase,'finished');
-  assert.equal(g.history[0].kills[0].perfect,true);assert.equal(g.history[0].kills[0].loot,null);
-  assert.equal(g.history[0].kills[0].lootDecision,'skip');
+  assert.equal(g.history[0].kills[0].oneShot,false);assert.equal(g.history[0].kills[0].loot.upgraded,false);
+  assert.equal(g.history[0].kills[0].lootDecision,'mandatory');
 });
 test('bosses and non-kills never allow a loot choice',()=>{
   const g=fixture(['rat'],[[e('attack',8)]]);assert.throws(()=>choosePerfectLoot(g,'test0','skip'));
@@ -171,7 +172,7 @@ test('100 automated smoke runs finish without corrupting cards, row or logs',()=
 const hpFixture=(names=['guard'],cards=[[e('attack',3)],[e('attack',2)]],opts={})=>fixture(names,cards,{combatModel:'persistent-hp',...opts});
 test('HP model starts with separate HP/ATK, while keeping the same seed and card order',()=>{
   const g=createGame({combatModel:'persistent-hp'}),classic=createGame();
-  assert.equal(g.gdd,'1.6-hp-atk-single-skip-test');assert.deepEqual(g.hand,classic.hand);
+  assert.equal(g.gdd,'1.7-hp-atk-one-shot-test');assert.deepEqual(g.hand,classic.hand);
   for(const m of [...g.row,...g.dungeon]){assert.equal(m.hp,m.threat);assert.equal(m.maxHp,m.threat);assert.equal(m.atk,Math.max(1,m.threat-2));}
   assert.throws(()=>createGame({combatModel:'unknown'}));
 });
@@ -190,13 +191,48 @@ test('nonattacking survivors also retain wounds when the attacker is Endured',()
   const g=hpFixture(['ogre','guard'],[[e('attack',3)]]);a(g,0,0,1);resolve(g);assert.equal(g.current.attacker.name,'Ogre');choose(g,'endure');
   assert.equal(g.row[1].hp,2);assert.equal(g.row[1].atk,4);
 });
-test('later exact remaining HP gives Perfect loot, overkill gives normal loot',()=>{
-  for(const amount of [2,3]){
+test('kills after chipping always give normal loot, even exact or above original max HP',()=>{
+  for(const amount of [2,3,9]){
     const g=hpFixture();a(g,0,0,0);resolve(g);choose(g,'leave');
     g.hand=[makeCard(g,'Finisher',[e('attack',amount)])];beginTurn(g);a(g,0,0,0);resolve(g);
     const kill=g.current?.kills[0]||g.history.at(-1).kills[0];
-    assert.equal(kill.monster.hp,2);assert.equal(kill.perfect,amount===2);assert.equal(kill.loot.effects[0].value,amount===2?5:4);
+    assert.equal(kill.monster.hp,2);assert.equal(kill.oneShot,false);assert.equal(kill.perfect,false);assert.equal(kill.loot.effects[0].value,4);
+    assert.equal(kill.lootDecision,'mandatory');
   }
+});
+test('One-shot combines cards and upgrades the first effect with exact damage or overkill',()=>{
+  for(const amount of [2,5]){
+    const g=hpFixture(['goblin'],[[e('attack',2)],[e('attack',amount)]]);
+    a(g,0,0,0);assert.equal(preview(g).kills.length,0);a(g,1,0,0);resolve(g);
+    const kill=g.history[0].kills[0];
+    assert.equal(kill.oneShot,true);assert.equal(kill.perfect,false);assert.equal(kill.lootDecision,'take');
+    assert.deepEqual(kill.loot.effects,[e('attack',3),e('attack',2)]);
+    assert.equal(exportRun(g).turns[0].kills[0].oneShot,true);
+    const csv=exportCSV(g).split('\r\n');assert.ok(csv[0].endsWith('"one_shots"'));assert.ok(csv[1].endsWith('"1"'));
+  }
+});
+test('One-shot skip survives overkill, transfers, and resets after moving or scrapping required damage',()=>{
+  const g=hpFixture(['rat','rat','troll'],[[e('attack',2)],[e('attack',2)],[e('attack',1)]]);
+  a(g,0,0,0);a(g,1,0,1);choosePerfectLoot(g,'test0','skip');
+  a(g,2,0,0);assert.equal(g.lootChoices.test0,'skip');
+  choosePerfectLoot(g,'test1','skip');assert.equal(g.lootChoices.test0,'take');
+  choosePerfectLoot(g,'test0','skip');a(g,0,0,2);assert.equal(g.lootChoices.test0,undefined);
+  a(g,0,0,0);assert.equal(g.lootChoices.test0,undefined);choosePerfectLoot(g,'test0','skip');
+  scrap(g,g.hand[0].id);assert.equal(g.lootChoices.test0,undefined);
+  scrap(g,null);a(g,0,0,0);choosePerfectLoot(g,'test0','skip');resolve(g);choose(g,'endure');
+  assert.deepEqual(g.history[0].kills.map(k=>k.lootDecision),['skip','take']);
+  assert.equal(g.history[0].kills.filter(k=>k.oneShot).length,2);assert.deepEqual(g.lootChoices,{});
+});
+test('an untouched monster remains eligible after waiting through earlier turns',()=>{
+  const g=hpFixture(['guard'],[[e('block',20)]]);a(g,0,0,'self');resolve(g);choose(g,'leave');
+  g.hand=[makeCard(g,'Strike',[e('attack',6)])];beginTurn(g);a(g,0,0,0);resolve(g);
+  assert.equal((g.current?.kills[0]||g.history.at(-1).kills[0]).oneShot,true);
+});
+test('a full-health boss stage can be One-shot but never gives loot or a skip',()=>{
+  const g=hpFixture([null],[[e('attack',10)]]);g.dungeon=[];refill(g);beginTurn(g);a(g,0,0,0);
+  assert.throws(()=>choosePerfectLoot(g,'boss1','skip'));resolve(g);
+  assert.equal(g.history[0].kills[0].oneShot,true);assert.equal(g.history[0].kills[0].lootDecision,'none');
+  assert.equal(g.history[0].kills[0].loot,null);assert.equal(g.row[0].stage,2);
 });
 test('attacker is chosen by ATK, not remaining HP; leftmost wins ATK ties',()=>{
   const g=hpFixture(['troll','guard']);g.row[0].hp=1;g.row[1].atk=9;
@@ -220,11 +256,11 @@ test('HP boss retains wounds, escalates ATK, and resets both stats at next stage
 });
 test('HP stage 3 wins immediately even with a lethal survivor',()=>{
   const g=hpFixture(['ogre',null],[[e('attack',2)]]);g.row[1]={id:'boss3',boss:true,stage:3,name:'Gravekeeper',hp:2,maxHp:14,atk:18,threat:14};g.hp=1;g.bossSpawned=true;
-  a(g,0,0,1);assert.equal(preview(g).damage,0);resolve(g);assert.equal(g.result,'won');assert.equal(g.hp,1);assert.equal(g.history[0].kills[0].perfect,true);
+  a(g,0,0,1);assert.equal(preview(g).damage,0);resolve(g);assert.equal(g.result,'won');assert.equal(g.hp,1);assert.equal(g.history[0].kills[0].oneShot,false);
 });
 test('HP model exports its ruleset, combat mode and wound data in JSON/CSV',()=>{
   const g=hpFixture();a(g,0,0,0);resolve(g);choose(g,'leave');const out=exportRun(g);
-  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.6-hp-atk-single-skip-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
+  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.7-hp-atk-one-shot-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
   assert.ok(exportCSV(g).includes('combat_model'));assert.ok(exportCSV(g).includes('hpBefore'));assert.ok(exportCSV(g).includes('persistent-hp'));
 });
 test('100 HP smoke runs complete without negative survivor HP or losing wounds',()=>{

@@ -25,8 +25,15 @@ try{
     assert.equal(await option(1,'skip').getAttribute('aria-pressed'),'true');
     assert.equal(await option(2,'take').getAttribute('aria-pressed'),'true');
     await click(token(2));await click(monster(1));
-    assert.equal(await page.locator('.monster-slot').nth(1).locator('.loot-options').count(),0);
+    assert.equal(await page.locator('.monster-slot').nth(1).locator('.loot-options').count(),1);
+    assert.equal(await option(1,'skip').getAttribute('aria-pressed'),'true');
+    assert.match(await monster(1).innerText(),/One-shot/);
     await click(token(2));await click(token(2));
+    assert.equal(await option(1,'skip').getAttribute('aria-pressed'),'true');
+    // Remove the required strike: the kill and skip disappear, then restoring defaults to Take.
+    await click(token(0));await click(token(0));
+    assert.equal(await page.locator('.monster-slot').nth(1).locator('.loot-options').count(),0);
+    await click(token(0));await click(monster(1));
     assert.equal(await option(1,'take').getAttribute('aria-pressed'),'true');
     await click(option(1,'skip'));
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -40,10 +47,12 @@ try{
     const run=JSON.parse(await readFile(path,'utf8'));
     assert.equal(run.finalDeck.length,11);assert.equal(run.turns[0].kills.length,2);
     assert.equal(run.turns[0].kills[0].monster.name,'Bat');
+    assert.equal(run.turns[0].kills[0].oneShot,true);
+    assert.equal(run.turns[0].kills[1].oneShot,true);
     assert.equal(run.turns[0].kills[0].loot,null);assert.equal(run.turns[0].kills[0].lootDecision,'skip');
     assert.equal(run.turns[0].kills[1].loot.effects[0].value,3);assert.equal(run.turns[0].kills[1].lootDecision,'take');
     assert.match(await page.locator('#history-list').innerText(),/loot skipped/);
-    console.log(`${mobile?'Mobile':'Desktop'}: independent Perfect choices, undo, invalidation, resolve and export passed`);
+    console.log(`${mobile?'Mobile':'Desktop'}: One-shot choices with overkill, undo, invalidation, resolve and export passed`);
     await page.close();
   }
   assert.deepEqual(errors,[]);

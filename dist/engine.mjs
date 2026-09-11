@@ -24,6 +24,8 @@ export function makeCard(state, name, effects, upgraded=false) {
 export const hasPersistentHP = state => state.settings.combatModel === 'persistent-hp';
 export const monsterHP = (state, monster) => hasPersistentHP(state) ? monster.hp : monster.threat;
 export const monsterATK = (state, monster) => hasPersistentHP(state) ? monster.atk : monster.threat;
+export const isOneShot = (state, monster, attack) => hasPersistentHP(state) && monster.hp===monster.maxHp && attack>=monster.hp;
+export const isRewardKill = (state, monster, attack) => hasPersistentHP(state) ? isOneShot(state,monster,attack) : attack===monster.threat;
 function combatStats(monster,model) {
   if(model==='persistent-hp') return {...monster,hp:monster.threat,maxHp:monster.threat,atk:Math.max(1,monster.threat-2)};
   return monster;
@@ -112,21 +114,23 @@ export function resetAssignments(state) {
   require(state.phase==='planning','Assignments are locked.');
   state.assignments={};state.scrapId=null;state.lootChoices={};state.current.moves++;
 }
-function eligiblePerfectLoot(state){
+function eligibleRewardLoot(state){
   const p=preview(state);
-  return p.kills.filter(m=>!m.boss&&p.attacks[m.id]===monsterHP(state,m));
+  return p.kills.filter(m=>!m.boss&&isRewardKill(state,m,p.attacks[m.id]));
 }
 function pruneLootChoices(state){
-  const ids=new Set(eligiblePerfectLoot(state).map(m=>m.id));
+  const ids=new Set(eligibleRewardLoot(state).map(m=>m.id));
   for(const id of Object.keys(state.lootChoices))if(!ids.has(id))delete state.lootChoices[id];
 }
-export function choosePerfectLoot(state,monsterId,decision){
+export function chooseLoot(state,monsterId,decision){
   require(state.phase==='planning','Loot choices are locked.');
   require(['take','skip'].includes(decision),'Choose Take loot or Skip loot.');
-  require(eligiblePerfectLoot(state).some(m=>m.id===monsterId),'Only a Perfect Kill lets you skip loot.');
+  require(eligibleRewardLoot(state).some(m=>m.id===monsterId),hasPersistentHP(state)?'Only a One-shot lets you skip loot.':'Only a Perfect Kill lets you skip loot.');
   if(decision==='skip')for(const id of Object.keys(state.lootChoices))if(state.lootChoices[id]==='skip')state.lootChoices[id]='take';
   state.lootChoices[monsterId]=decision;state.current.moves++;
 }
+// Retain the old entry point for existing scripts; eligibility follows the selected combat model.
+export const choosePerfectLoot = chooseLoot;
 export function preview(state) {
   const attacks={};let block=0,heal=0;
   for(const c of state.hand) if(c.id!==state.scrapId) c.effects.forEach((e,i)=>{
@@ -154,16 +158,17 @@ export function resolve(state,notes={}) {
   state.hand=state.hand.filter(c=>c.id!==state.scrapId);
   state.hp+=p.healed;
   for(const m of p.kills) {
-    const slot=state.row.findIndex(item=>item?.id===m.id),perfect=p.attacks[m.id]===monsterHP(state,m);
+    const slot=state.row.findIndex(item=>item?.id===m.id),oneShot=isOneShot(state,m,p.attacks[m.id]);
+    const perfect=!hasPersistentHP(state)&&p.attacks[m.id]===monsterHP(state,m),reward=oneShot||perfect;
     let loot=null;
-    const lootDecision=m.boss?'none':perfect?(state.lootChoices[m.id]||'take'):'mandatory';
+    const lootDecision=m.boss?'none':reward?(state.lootChoices[m.id]||'take'):'mandatory';
     if(!m.boss) {
       if(lootDecision!=='skip'){
-        loot=makeCard(state,m.loot,perfect?upgradedEffects(m.effects):m.effects,perfect);
+        loot=makeCard(state,m.loot,reward?upgradedEffects(m.effects):m.effects,reward);
         state.discard.push(loot);
       }
     } else if(m.stage<3) state.pendingBoss={slot,stage:m.stage+1};
-    state.current.kills.push({monster:copy(m),perfect,loot:copy(loot),lootDecision});
+    state.current.kills.push({monster:copy(m),perfect,oneShot,loot:copy(loot),lootDecision});
     state.row[slot]=null;
   }
   if(hasPersistentHP(state)) for(const m of state.row) if(m) m.hp=p.remainingHP[m.id];
@@ -209,10 +214,10 @@ export function exportRun(state,runNotes='') {
     finalDeck:copy(deck(state)),runNotes};
 }
 export function exportCSV(state,runNotes='') {
-  const header=['prototype','gdd','seed','start_hp','max_hp','scrap_enabled','escalation_interval','run_started','run_result','turn','hp_start','hp_end','deck_start','deck_end','kills','perfects','damage','attacker','decision','scrap','moves','hand','row_start','assignments','loot','row_end','notes','run_notes','combat_model','monster_damage','loot_choices'];
+  const header=['prototype','gdd','seed','start_hp','max_hp','scrap_enabled','escalation_interval','run_started','run_result','turn','hp_start','hp_end','deck_start','deck_end','kills','perfects','damage','attacker','decision','scrap','moves','hand','row_start','assignments','loot','row_end','notes','run_notes','combat_model','monster_damage','loot_choices','one_shots'];
   const rows=state.history.map(t=>[VERSION,state.gdd,state.settings.seed,state.settings.startHP,state.maxHP,state.settings.scrap,state.settings.escalation,state.startedAt,state.result||'in-progress',t.turn,t.start.hp,t.end.hp,t.start.deckSize,t.end.deckSize,
     t.kills.length,t.kills.filter(k=>k.perfect).length,t.damage,t.attacker?.name||'',t.decision,t.scrap?.name||'',t.moves,
-    JSON.stringify(t.start.hand),JSON.stringify(t.start.row),JSON.stringify(t.assignments),JSON.stringify(t.kills.map(k=>k.loot)),JSON.stringify(t.end.row),JSON.stringify(t.notes),runNotes,state.settings.combatModel,JSON.stringify(t.monsterDamage),JSON.stringify(t.kills.filter(k=>k.perfect&&!k.monster.boss).map(k=>({monsterId:k.monster.id,monster:k.monster.name,decision:k.lootDecision})))]);
+    JSON.stringify(t.start.hand),JSON.stringify(t.start.row),JSON.stringify(t.assignments),JSON.stringify(t.kills.map(k=>k.loot)),JSON.stringify(t.end.row),JSON.stringify(t.notes),runNotes,state.settings.combatModel,JSON.stringify(t.monsterDamage),JSON.stringify(t.kills.filter(k=>(k.oneShot||k.perfect)&&!k.monster.boss).map(k=>({monsterId:k.monster.id,monster:k.monster.name,decision:k.lootDecision}))),t.kills.filter(k=>k.oneShot).length]);
   // Quoting preserves delimiters; an apostrophe prevents spreadsheet formula evaluation of user notes/seeds.
   const cell=v=>{let s=String(v??'');if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
   return '\uFEFF'+[header,...rows].map(row=>row.map(cell).join(',')).join('\r\n');

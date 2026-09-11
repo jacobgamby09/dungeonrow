@@ -13,7 +13,7 @@
 <body>
   <div class="shell">
     <header class="masthead">
-      <a class="wordmark" href="./" aria-label="Dungeon Row, start over"><span class="brand-mark">D<span>R</span></span><span>DUNGEON ROW<small id="build-label">v0.5.1 · HP + ATK TEST</small></span></a>
+      <a class="wordmark" href="./" aria-label="Dungeon Row, start over"><span class="brand-mark">D<span>R</span></span><span>DUNGEON ROW<small id="build-label">v0.6.0 · HP + ATK TEST</small></span></a>
       <nav aria-label="Help"><button id="rules-toggle" class="quiet" aria-expanded="false" aria-controls="rules">Rules</button><button id="test-toggle" class="quiet" aria-expanded="false" aria-controls="test-panel">Test settings</button></nav>
       <button id="menu-toggle" class="mobile-only quiet" aria-haspopup="dialog">Menu</button>
     </header>
@@ -46,7 +46,7 @@
         <div class="note-grid">
           <label>Desired loot / did it change the decision?<textarea id="loot-note" rows="2" placeholder="Player’s own words"></textarea></label>
           <label>Two options considered / plan for Leave<textarea id="lines-note" rows="2" placeholder="Which options were considered?"></textarea></label>
-          <label>Intentionally planned Perfects<textarea id="perfect-note" rows="2" placeholder="Monster name; blank = not recorded"></textarea></label>
+          <label><span id="reward-note-label">Intentionally planned One-shots</span><textarea id="perfect-note" rows="2" placeholder="Monster name; blank = not recorded"></textarea></label>
         </div>
       </details>
       <details id="history-panel"><summary>Run log and export <span id="log-count"></span></summary>

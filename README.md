@@ -1,6 +1,6 @@
-# Dungeon Row — prototype 0.5.1
+# Dungeon Row — prototype 0.6.0
 
-A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.6 single skip.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
+A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.7 one-shot.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
 
 The interface is in English. Version 0.2.1 gives monsters a heart and health bar, a separate orange sword/Attack field, a damage preview on the health bar, and a label identifying the attacker. Player health uses the same heart symbol. Version 0.2.2 makes Scrap standard, adds Scrap card / Undo Scrap buttons to each hand card, and labels the unrevealed-monster counter Mobs left in dungeon. Card values are unchanged.
 
@@ -8,11 +8,13 @@ The interface is in English. Version 0.2.1 gives monsters a heart and health bar
 
 Heal and Block activate on yourself immediately when clicked; click again to deactivate. The health panel shows current HP → projected HP after End Turn, with actual healing and damage (or All damage blocked). It respects maximum HP and updates with assignments, kills, Scrap and reset. `progress.md` tracks rule and interface changes.
 
-## Perfect loot choice — updated in v0.5.0
+## One-shot loot — v0.6.0
 
-Each normal monster with a planned Perfect Kill offers **Take loot** (upgraded, selected by default) or **Skip loot** (no card). Skip at most one reward per turn. Move skip here transfers that choice; other Perfects give upgraded loot. Ordinary kills always add normal loot. Boss stages never give loot. Changing assignments so a kill is no longer Perfect resets that monster's loot choice.
+In the default persistent-HP model, a **One-shot** kills a monster from full HP within one turn. Combine as many card effects as needed; overkill counts. An untouched monster remains eligible even if it entered on an earlier turn. A previously wounded monster always gives normal loot when killed, even with exact damage or damage above its original maximum HP.
 
-The turn log and JSON/CSV exports record skipped Perfect rewards separately from Scrap. Skipping loot prevents a new card from entering the deck; Scrap removes an existing card at the cost of its effects that turn.
+Each planned One-shot offers **Take loot** (first effect +1, selected by default) or **Skip loot** (no card). Skip at most one reward per turn. **Move skip here** transfers that choice; other One-shots give upgraded loot. Adding excess Attack preserves a skip; removing enough Attack to lose the kill clears it. Boss stages never give loot or a skip.
+
+The classic Threat comparison mode retains exact-match Perfect Kills. JSON logs use `oneShot` for the new HP rule and `perfect` for the classic rule; CSV includes a separate `one_shots` count. Observer notes use `intentionalOneShots` in HP mode. Historical run files keep their original meaning. Skipping loot and Scrap remain separate mechanics.
 
 ## Mobile layout — v0.3.0
 
@@ -34,20 +36,20 @@ Export an active run before refreshing to load an update. Runs are not saved aut
 
 - Click or tap Heal/Block to toggle it on yourself. For Attack, select an effect and then a monster. You can also drag effects to their targets.
 - Select an assigned effect and choose another target to move it. Click the selected effect again to unassign it. Reset assignments clears all assignments.
-- Monster health bars preview damage. An exact kill shows Perfect loot; the highlighted Attack field identifies the enemy that will attack. The line below the row forecasts healing, Block, damage, and your resulting HP.
+- Monster health bars preview damage. A kill from full HP shows One-shot loot; the highlighted Attack field identifies the enemy that will attack. The line below the row forecasts healing, Block, damage, and your resulting HP.
 - Press End Turn. After a normal enemy attacks, choose Endure to remove it without loot or Leave to keep it.
 - Scrap is always available in the interface. Click Scrap card directly on a hand card, then Undo Scrap on the same card to cancel. You can also drag its Scrap button to the shared Scrap area. One whole card can be permanently removed per turn; it provides no effects and is not replaced. Undo is available before End Turn.
 - Rules and Test settings are at the top. Settings apply when starting a new run.
 
 Leave Shuffle seed blank for a new random seed each run. Enter a specific seed to repeat a shuffle with the same settings and game version. Test settings shows the current run’s seed, including on mobile; exports also retain it.
 
-Default settings: random seed, persistent HP, 20 player HP, Scrap enabled, +1 Attack every turn. Monster HP starts at printed Threat; Attack starts at max(1, Threat − 2). Damage persists without lowering Attack. Perfect requires exactly the remaining HP on the killing turn. Only Attack escalates. In classic mode, Threat remains both the kill threshold and attack strength.
+Default settings: random seed, persistent HP, 20 player HP, Scrap enabled, +1 Attack every turn. Monster HP starts at printed Threat; Attack starts at max(1, Threat − 2). Damage persists without lowering Attack. One-shot requires full HP at the start of the turn and lethal total Attack; overkill counts. Only Attack escalates. In classic mode, Threat remains both the kill threshold and attack strength.
 
 Every-other-turn escalation happens after turns 2, 4, 6, etc. Player maximum HP is 20, or starting HP if higher. Exports include all settings and the combat model.
 
 ## Record a run
 
-Complete **Observer notes** before End Turn to record desired loot, options considered, and intentionally planned Perfects. The game does not infer player intent.
+Complete **Observer notes** before End Turn to record desired loot, options considered, and intentionally planned One-shots (Perfects in classic mode). The game does not infer player intent.
 
 Open **Run log and export** for JSON or CSV. JSON contains detailed turn states, any unfinished turn, notes, and the final deck. CSV has one row per completed turn. Add overall run notes before exporting if useful.
 
@@ -73,10 +75,10 @@ An optional read-only WebMCP tool exposes visible board information in supportin
 
 ## Verification and source
 
-- `npm test`: 45 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, Perfects, bosses, Scrap, and exports.
+- `npm test`: 49 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, One-shots, classic Perfects, bosses, Scrap, and exports.
 - `node scripts/verify-seeds.mjs`: random initial/restarted seeds and repeatable manual seeds on desktop and mobile.
 - `node scripts/verify-qol.mjs`: desktop/mobile checks for one-tap Heal/Block, undo, the HP forecast, Scrap interactions and resolved HP. Supports `DUNGEON_ROW_URL` for hosted checks.
-- `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for independent loot choices, changing a Perfect into an overkill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.
+- `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for One-shot loot choices, preserving skips with overkill, invalidating a kill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.
 - `node scripts/verify-mobile.mjs`: phone layouts at 320, 390 and 430 pixels, landscape, menu/details, layout switching, a full mobile run, fixed turn controls, and exports. Uses the same Playwright setup below.
 - `node scripts/verify-browser.mjs`: browser checks for assignments, previews, undo, mouse/touch dragging, Scrap, complete runs in both models, exports, mobile layout, and 200% text size. Uses this computer's bundled Playwright; elsewhere set `PLAYWRIGHT_PACKAGE` to the installed Playwright package's `package.json`.
 - `scripts/build-print-pack.py`: regenerates the historical PDF pack from card data with ReportLab and Arial. Requires Python with `reportlab` and `pypdf`.

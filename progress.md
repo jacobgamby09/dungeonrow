@@ -2,6 +2,15 @@
 
 Loggen følger ændringer i prototype, regler og udgivelse. Automatiske kontroller er teknisk verifikation, ikke menneskelige spiltests.
 
+## v0.6.0 — One-shot i HP-varianten · 11. september 2026
+
+- One-shot erstatter Perfect Kill i standardvarianten: dræb fra fuld HP på én tur. Flere kort kan kombineres, og overkill tæller.
+- Tidligere sårede monstre giver normal loot, selv ved præcis skade eller skade over deres oprindelige max-HP. Urørte monstre er stadig berettigede på senere ture.
+- Belønningen er fortsat opgraderet loot eller højst ét loot-skip per tur. Overkill bevarer et valgt skip; utilstrækkelig skade, reset og Scrap kan fjerne valget.
+- Kort, monsterdetaljer, regler, resultat og observationsfelt bruger One-shot. Eksporter skelner nye One-shots fra historiske Perfects. Classic Threat beholder sin præcise Perfect-regel.
+- GDD v1.7 dokumenterer forsøget. Boss, Endure og Scrap er ikke ændret i denne version.
+- Verifikation: 49 regeltests bestået, inklusive 100 automatiske runs per kampmodel. Målrettede tests dækker kombinerede angreb, overkill, tidligere wounds, ventende urørte monstre, ét skip, Scrap, bosser og eksport. Eksisterende browserscripts er tilpasset, men ikke kørt i denne opdatering. Menneskelig balancetest afventer næste run.
+
 ## v0.5.1 — tilfældige seeds som standard · 11. september 2026
 
 - Spillet får et tilfældigt seed, når siden åbnes. Nye runs får også et nyt seed, når seed-feltet er tomt.
