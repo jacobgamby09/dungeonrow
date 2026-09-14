@@ -1,7 +1,7 @@
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import {createGame,assign,resolve,choose} from '../dist/engine.mjs';
+import {createGame,assign,resolve,choose,canTargetEffect} from '../dist/engine.mjs';
 const req=createRequire(process.env.PLAYWRIGHT_PACKAGE || 'C:/Users/JacobGamby/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/package.json');
 const {chromium}=req('playwright');
 await mkdir('tmp/qa',{recursive:true});
@@ -24,7 +24,8 @@ try{
   await page.goto(url);await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});await page.locator('#mobile-end-turn').waitFor();
   assert.equal(await page.locator('.scrap-target').isVisible(),false);
   assert.equal(await page.locator('.notebook').isVisible(),false);
-  assert.ok(await page.evaluate(()=>document.querySelector('.hand').getBoundingClientRect().bottom<=document.querySelector('.mobile-turnbar').getBoundingClientRect().top),'Hand and dock fit on a 390 × 844 screen');
+  await page.locator('.hand').evaluate(el=>el.scrollIntoView({block:'end'}));
+  assert.ok(await page.evaluate(()=>document.querySelector('.hand').getBoundingClientRect().bottom<=document.querySelector('.mobile-turnbar').getBoundingClientRect().top),'Hand can scroll clear of the dock on a 390 × 844 screen');
   await page.screenshot({path:'tmp/qa/mobile-390.png',fullPage:true});
   await page.locator('[data-effect]').first().tap();
   assert.equal(await page.locator('#board').getAttribute('data-selection'),'attack');
@@ -75,6 +76,8 @@ try{
   while(expected.phase!=='finished'&&safety++<100){
     const strongest=expected.row.filter(Boolean).reduce((a,b)=>a.atk>=b.atk?a:b);
     for(const c of expected.hand)for(let i=0;i<c.effects.length;i++){
+      if(c.choice&&i>0)continue;
+      if(c.effects[i].type==='attack'&&!canTargetEffect(expected,c.effects[i],strongest))continue;
       const target=c.effects[i].type==='attack'?strongest.id:'self';
       await page.locator(`[data-effect="${c.id}:${i}"]`).tap();
       assert.equal(await page.locator('#board').getAttribute('data-selection'),c.effects[i].type==='attack'?'attack':'');

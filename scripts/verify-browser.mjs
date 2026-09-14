@@ -1,7 +1,7 @@
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import {createGame,assign,resolve,choose} from '../dist/engine.mjs';
+import {createGame,assign,resolve,choose,canTargetEffect} from '../dist/engine.mjs';
 const req=createRequire(process.env.PLAYWRIGHT_PACKAGE || 'C:/Users/JacobGamby/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/package.json');
 const {chromium}=req('playwright');
 await mkdir('tmp/qa',{recursive:true});
@@ -51,7 +51,7 @@ try{
   assert.equal(await page.locator('.monster-slot').first().locator('.loot-options').count(),0);
   await page.locator('#end-turn').click();await page.locator('[data-choice="endure"]').click();
   const hpRun=JSON.parse(await download('json'));
-  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.7-hp-atk-one-shot-test');
+  assert.equal(hpRun.settings.combatModel,'persistent-hp');assert.equal(hpRun.gdd,'1.8-hp-atk-card-choices-test');
   assert.equal(hpRun.turns[0].end.row[0].hp,2);assert.equal(hpRun.turns[1].kills[0].oneShot,false);assert.equal(hpRun.turns[1].kills[0].loot.upgraded,false);
   assert.ok((await download('csv')).includes('monster_damage'));
   checks.push('HP mode is default; preview is reversible, wound persists, ATK escalates, later exact HP gives normal loot, exports identify variant');
@@ -122,6 +122,8 @@ try{
   while(hpGame.phase!=='finished'&&hpSafety++<100){
     const strongest=hpGame.row.filter(Boolean).reduce((a,b)=>a.atk>=b.atk?a:b);
     for(const c of hpGame.hand)for(let i=0;i<c.effects.length;i++){
+      if(c.choice&&i>0)continue;
+      if(c.effects[i].type==='attack'&&!canTargetEffect(hpGame,c.effects[i],strongest))continue;
       const target=c.effects[i].type==='attack'?strongest.id:'self';
       await page.locator(`[data-effect="${c.id}:${i}"]`).click();if(target!=='self')await page.locator(`[data-target="${target}"]`).click();assign(hpGame,c.id,i,target);
     }

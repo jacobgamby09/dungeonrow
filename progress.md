@@ -2,6 +2,25 @@
 
 Loggen følger ændringer i prototype, regler og udgivelse. Automatiske kontroller er teknisk verifikation, ikke menneskelige spiltests.
 
+## v0.7.0 — kortvalg og første One-shot-belønning · 14. september 2026
+
+- HP-startdecket har stadig ti kort: to Clubs bliver Guarded Strike (Attack 3 eller Block 4), Torch bliver Expose (Attack 1 eller Attack 4 mod tidligere sårede fjender), og Bandage bliver Second Wind (Heal 3 eller Attack 2).
+- Choose one-kort tillader kun én effekt per tur; skift erstatter den tidligere effekt. Andre kort beholder alle deres effekter. Scrap fjerner fortsat hele kortet.
+- Første modtagne One-shot-loot giver et valg mellem monsterets opgraderede loot, Executioner og Rend. Præcis ét kort går i discard. Valget forbruges ved End Turn; et skip bevarer muligheden. Ved flere modtagne One-shots gælder valget den venstreste fjende.
+- Executioner giver Attack 6 mod fuld HP, ellers 3. Rend giver Attack 6 mod tidligere sårede fjender, ellers 3. Alle sår-/fuld-HP-betingelser vurderes ved turens start.
+- Mobil får en genvej til det første belønningsvalg. Valg, betingelser og effektiv skade fremgår af kort, prognoser og eksporter. GDD v1.8 og README er opdateret.
+- Verifikation: 59 regeltests bestået, inklusive 100 automatiske runs per kampmodel. Nye tests dækker gensidigt udelukkende effekter, målkrav, rækkefølgeuafhængig skade, ét belønningskort, skip, nulstilling, efterfølgende ture og eksport. JavaScript-syntaks og lokale assetreferencer er kontrolleret. Browserscripts er tilpasset, men ikke kørt i denne opdatering.
+- Ingen ændring af monster-/bosstal, One-shot-krav, Scrap-pris eller Endure. De historiske simulationsresultater bevares, og simulationsscriptet er låst til v0.5.1/v0.6.0, så nye kort ikke utilsigtet ændrer den gamle sammenligning.
+
+## Simulationsanalyse af v0.6.0 · 11. september 2026
+
+- Kørt 4.800 automatiske runs: 200 fælles seeds × 24 kombinationer af Perfect/One-shot, to planlægningsmål, tre Endure/Leave-strategier og aktiv/ingen Scrap. Dertil 48 cases på to bruger-seeds.
+- Scrap havde den største forskel i botsenes resultater. One-shot ændrede sejrsandelen fra -8,5 til +5,5 procentpoint afhængigt af strategi; der er ikke grundlag for at kalde det en entydig sværhedsforøgelse.
+- One-shot-bots med Scrap vandt 86,8–97,4 % efter at have nået bossen alene. Det er et betinget resultat, ikke winrate for hele spillet.
+- To bots vandt det seneste brugerseed fra starten; vinderlogs, metode, rå resultater og analyse er gemt i `output/experiments/one-shot-balance/`.
+- Verificeret prognose mod motoren hver simuleret tur samt genafspilning af brugerens 12 registrerede ture. Ingen fremtidig kortviden i planlæggeren og ingen runs stoppet af turloftet. Automatiske bots er ikke menneskelige spiltests eller optimalt spil.
+- Ingen ændringer i spilleregler eller liveversion.
+
 ## v0.6.0 — One-shot i HP-varianten · 11. september 2026
 
 - One-shot erstatter Perfect Kill i standardvarianten: dræb fra fuld HP på én tur. Flere kort kan kombineres, og overkill tæller.

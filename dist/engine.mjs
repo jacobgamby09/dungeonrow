@@ -1,4 +1,4 @@
-import {STARTER, MONSTERS, BOSS_THREATS, VERSION, GDD, HP_RULESET, upgradedEffects} from './data.mjs';
+import {STARTER, CHOICE_STARTER, DIRECTION_REWARDS, MONSTERS, BOSS_THREATS, VERSION, GDD, HP_RULESET, upgradedEffects} from './data.mjs';
 export const copy = value => structuredClone(value);
 const require = (condition, message) => { if (!condition) throw new Error(message); };
 export function random(seed) {
@@ -18,14 +18,26 @@ export function shuffle(cards, rng) {
   }
   return result;
 }
-export function makeCard(state, name, effects, upgraded=false) {
-  return {id:`c${state.nextCard++}`,name,effects:copy(effects),upgraded};
+export function makeCard(state, name, effects, upgraded=false,choice=false) {
+  return {id:`c${state.nextCard++}`,name,effects:copy(effects),upgraded,...(choice?{choice:true}:{})};
 }
 export const hasPersistentHP = state => state.settings.combatModel === 'persistent-hp';
 export const monsterHP = (state, monster) => hasPersistentHP(state) ? monster.hp : monster.threat;
 export const monsterATK = (state, monster) => hasPersistentHP(state) ? monster.atk : monster.threat;
 export const isOneShot = (state, monster, attack) => hasPersistentHP(state) && monster.hp===monster.maxHp && attack>=monster.hp;
 export const isRewardKill = (state, monster, attack) => hasPersistentHP(state) ? isOneShot(state,monster,attack) : attack===monster.threat;
+export function wasWounded(state,monster){
+  const start=state.current?.start.row.find(m=>m?.id===monster.id)||monster;
+  return hasPersistentHP(state)&&start.hp<start.maxHp;
+}
+export function canTargetEffect(state,effect,monster){
+  return !effect.requires||(effect.requires==='wounded'&&wasWounded(state,monster));
+}
+export function effectValue(state,effect,monster){
+  if(!monster||!effect.bonusWhen)return effect.value;
+  const bonus=effect.bonusWhen==='wounded'?wasWounded(state,monster):!wasWounded(state,monster);
+  return bonus?effect.bonusValue:effect.value;
+}
 function combatStats(monster,model) {
   if(model==='persistent-hp') return {...monster,hp:monster.threat,maxHp:monster.threat,atk:Math.max(1,monster.threat-2)};
   return monster;
@@ -38,7 +50,8 @@ export function makeMonster(key, id, model='classic') {
 export function deck(state) { return [...state.hand,...state.draw,...state.discard]; }
 export function snapshot(state) {
   return copy({hp:state.hp, hand:state.hand, row:state.row, draw:state.draw, discard:state.discard,
-    deckSize:deck(state).length, dungeonRemaining:state.dungeon.length, pendingBoss:state.pendingBoss});
+    deckSize:deck(state).length, dungeonRemaining:state.dungeon.length, pendingBoss:state.pendingBoss,
+    directionReward:state.directionReward});
 }
 export function createGame(settings={}) {
   // Classic is retained for existing engine consumers and v1.3 replays. The UI starts in the HP test model.
@@ -52,8 +65,8 @@ export function createGame(settings={}) {
     hp:opts.startHP,maxHP:Math.max(20,opts.startHP),turn:1,phase:'planning',result:null,
     draw:[],discard:[],hand:[],row:[null,null,null,null],dungeon:[],
     assignments:{},scrapId:null,history:[],current:null,bossSpawned:false,pendingBoss:null,
-    highestFloor:1,startedAt:new Date().toISOString(),endedAt:null};
-  for(const def of STARTER) for(let i=0;i<def.count;i++) state.draw.push(makeCard(state,def.name,def.effects));
+    directionReward:null,firstRewardSelection:null,highestFloor:1,startedAt:new Date().toISOString(),endedAt:null};
+  for(const def of opts.combatModel==='persistent-hp'?CHOICE_STARTER:STARTER) for(let i=0;i<def.count;i++) state.draw.push(makeCard(state,def.name,def.effects,false,def.choice));
   state.draw=shuffle(state.draw,state.rng);
   let monsterId=0;
   for(let floor=1;floor<=3;floor++) {
@@ -81,7 +94,7 @@ export function refill(state) {
   for(const m of state.row) if(m) state.highestFloor=Math.max(state.highestFloor,m.floor);
 }
 export function beginTurn(state) {
-  state.assignments={};state.scrapId=null;state.lootChoices={};state.phase='planning';
+  state.assignments={};state.scrapId=null;state.lootChoices={};state.firstRewardSelection=null;state.phase='planning';
   while(state.hand.length<4) {
     if(!state.draw.length && state.discard.length) {
       state.draw=shuffle(state.discard,state.rng);state.discard=[];
@@ -97,7 +110,9 @@ export function assign(state, cardId, index, target) {
   require(e && Number.isInteger(index),'Select an effect from your hand.');
   require(cardId!==state.scrapId,'Undo Scrap for this card first.');
   require(target===null || (e.type==='attack' ? state.row.some(m=>m?.id===target) : target==='self'),'Invalid target for this effect.');
+  if(target!==null&&e.type==='attack')require(canTargetEffect(state,e,state.row.find(m=>m?.id===target)),'Choose a monster that was wounded at the start of this turn.');
   const key=`${cardId}:${index}`;
+  if(target!==null&&card.choice)for(const other of Object.keys(state.assignments))if(other.startsWith(`${cardId}:`)&&other!==key)delete state.assignments[other];
   if(target===null) delete state.assignments[key]; else state.assignments[key]=target;
   pruneLootChoices(state);
   state.current.moves++;
@@ -112,7 +127,18 @@ export function scrap(state, cardId) {
 }
 export function resetAssignments(state) {
   require(state.phase==='planning','Assignments are locked.');
-  state.assignments={};state.scrapId=null;state.lootChoices={};state.current.moves++;
+  state.assignments={};state.scrapId=null;state.lootChoices={};state.firstRewardSelection=null;state.current.moves++;
+}
+export function firstRewardMonster(state,p=preview(state)){
+  if(!hasPersistentHP(state)||state.directionReward)return null;
+  return p.kills.find(m=>!m.boss&&isOneShot(state,m,p.attacks[m.id])&&state.lootChoices[m.id]!=='skip')||null;
+}
+export function chooseFirstReward(state,choice){
+  require(state.phase==='planning','Reward choices are locked.');
+  require(['monster',...Object.keys(DIRECTION_REWARDS)].includes(choice),'Choose monster loot, Executioner or Rend.');
+  const monster=firstRewardMonster(state);
+  require(monster,'Plan a One-shot with Take loot to choose your first reward.');
+  state.firstRewardSelection={monsterId:monster.id,choice};state.current.moves++;
 }
 function eligibleRewardLoot(state){
   const p=preview(state);
@@ -121,13 +147,14 @@ function eligibleRewardLoot(state){
 function pruneLootChoices(state){
   const ids=new Set(eligibleRewardLoot(state).map(m=>m.id));
   for(const id of Object.keys(state.lootChoices))if(!ids.has(id))delete state.lootChoices[id];
+  if(state.firstRewardSelection?.monsterId!==firstRewardMonster(state)?.id)state.firstRewardSelection=null;
 }
 export function chooseLoot(state,monsterId,decision){
   require(state.phase==='planning','Loot choices are locked.');
   require(['take','skip'].includes(decision),'Choose Take loot or Skip loot.');
   require(eligibleRewardLoot(state).some(m=>m.id===monsterId),hasPersistentHP(state)?'Only a One-shot lets you skip loot.':'Only a Perfect Kill lets you skip loot.');
   if(decision==='skip')for(const id of Object.keys(state.lootChoices))if(state.lootChoices[id]==='skip')state.lootChoices[id]='take';
-  state.lootChoices[monsterId]=decision;state.current.moves++;
+  state.lootChoices[monsterId]=decision;pruneLootChoices(state);state.current.moves++;
 }
 // Retain the old entry point for existing scripts; eligibility follows the selected combat model.
 export const choosePerfectLoot = chooseLoot;
@@ -136,7 +163,7 @@ export function preview(state) {
   for(const c of state.hand) if(c.id!==state.scrapId) c.effects.forEach((e,i)=>{
     const target=state.assignments[`${c.id}:${i}`];
     if(!target) return;
-    if(e.type==='attack') attacks[target]=(attacks[target]||0)+e.value;
+    if(e.type==='attack') attacks[target]=(attacks[target]||0)+effectValue(state,e,state.row.find(m=>m?.id===target));
     if(e.type==='block' && target==='self') block+=e.value;
     if(e.type==='heal' && target==='self') heal+=e.value;
   });
@@ -152,7 +179,10 @@ export function preview(state) {
 export function resolve(state,notes={}) {
   require(state.phase==='planning','This turn has already resolved.');
   const p=preview(state);
+  const first=firstRewardMonster(state,p);
+  const firstChoice=first&&state.firstRewardSelection?.monsterId===first.id?state.firstRewardSelection.choice:'monster';
   Object.assign(state.current,{assignments:copy(state.assignments),lootChoices:copy(state.lootChoices),scrap:copy(state.hand.find(c=>c.id===state.scrapId)||null),
+    firstRewardSelection:copy(state.firstRewardSelection),
     notes:copy(notes),healed:p.healed,block:p.block,kills:[],attacker:copy(p.attacker),damage:p.damage,
     monsterDamage:hasPersistentHP(state)?state.row.filter(m=>m&&(p.attacks[m.id]||0)>0).map(m=>({id:m.id,name:m.name,hpBefore:m.hp,hpAfter:p.remainingHP[m.id],assignedAttack:p.attacks[m.id],atk:m.atk})):[]});
   state.hand=state.hand.filter(c=>c.id!==state.scrapId);
@@ -164,11 +194,16 @@ export function resolve(state,notes={}) {
     const lootDecision=m.boss?'none':reward?(state.lootChoices[m.id]||'take'):'mandatory';
     if(!m.boss) {
       if(lootDecision!=='skip'){
-        loot=makeCard(state,m.loot,reward?upgradedEffects(m.effects):m.effects,reward);
+        const alternative=m.id===first?.id&&DIRECTION_REWARDS[firstChoice];
+        loot=alternative?makeCard(state,alternative.name,alternative.effects):makeCard(state,m.loot,reward?upgradedEffects(m.effects):m.effects,reward);
         state.discard.push(loot);
+        if(m.id===first?.id){
+          state.directionReward={turn:state.turn,monsterId:m.id,choice:firstChoice,card:copy(loot)};
+          state.current.directionReward=copy(state.directionReward);
+        }
       }
     } else if(m.stage<3) state.pendingBoss={slot,stage:m.stage+1};
-    state.current.kills.push({monster:copy(m),perfect,oneShot,loot:copy(loot),lootDecision});
+    state.current.kills.push({monster:copy(m),perfect,oneShot,loot:copy(loot),lootDecision,...(m.id===first?.id?{rewardChoice:firstChoice}:{})});
     state.row[slot]=null;
   }
   if(hasPersistentHP(state)) for(const m of state.row) if(m) m.hp=p.remainingHP[m.id];
@@ -210,14 +245,15 @@ export function exportRun(state,runNotes='') {
   return {prototype:VERSION,gdd:state.gdd,settings:copy(state.settings),maxHP:state.maxHP,
     startedAt:state.startedAt,endedAt:state.endedAt,result:state.result||'in-progress',
     completedTurns:state.history.length,highestFloor:state.highestFloor,
-    turns:copy(state.history),current:state.current?{...copy(state.current),assignments:copy(state.assignments),lootChoices:copy(state.lootChoices),scrapId:state.scrapId,phase:state.phase,state:snapshot(state)}:null,
+    directionReward:copy(state.directionReward),
+    turns:copy(state.history),current:state.current?{...copy(state.current),assignments:copy(state.assignments),lootChoices:copy(state.lootChoices),firstRewardSelection:copy(state.firstRewardSelection),scrapId:state.scrapId,phase:state.phase,state:snapshot(state)}:null,
     finalDeck:copy(deck(state)),runNotes};
 }
 export function exportCSV(state,runNotes='') {
-  const header=['prototype','gdd','seed','start_hp','max_hp','scrap_enabled','escalation_interval','run_started','run_result','turn','hp_start','hp_end','deck_start','deck_end','kills','perfects','damage','attacker','decision','scrap','moves','hand','row_start','assignments','loot','row_end','notes','run_notes','combat_model','monster_damage','loot_choices','one_shots'];
+  const header=['prototype','gdd','seed','start_hp','max_hp','scrap_enabled','escalation_interval','run_started','run_result','turn','hp_start','hp_end','deck_start','deck_end','kills','perfects','damage','attacker','decision','scrap','moves','hand','row_start','assignments','loot','row_end','notes','run_notes','combat_model','monster_damage','loot_choices','one_shots','first_reward'];
   const rows=state.history.map(t=>[VERSION,state.gdd,state.settings.seed,state.settings.startHP,state.maxHP,state.settings.scrap,state.settings.escalation,state.startedAt,state.result||'in-progress',t.turn,t.start.hp,t.end.hp,t.start.deckSize,t.end.deckSize,
     t.kills.length,t.kills.filter(k=>k.perfect).length,t.damage,t.attacker?.name||'',t.decision,t.scrap?.name||'',t.moves,
-    JSON.stringify(t.start.hand),JSON.stringify(t.start.row),JSON.stringify(t.assignments),JSON.stringify(t.kills.map(k=>k.loot)),JSON.stringify(t.end.row),JSON.stringify(t.notes),runNotes,state.settings.combatModel,JSON.stringify(t.monsterDamage),JSON.stringify(t.kills.filter(k=>(k.oneShot||k.perfect)&&!k.monster.boss).map(k=>({monsterId:k.monster.id,monster:k.monster.name,decision:k.lootDecision}))),t.kills.filter(k=>k.oneShot).length]);
+    JSON.stringify(t.start.hand),JSON.stringify(t.start.row),JSON.stringify(t.assignments),JSON.stringify(t.kills.map(k=>k.loot)),JSON.stringify(t.end.row),JSON.stringify(t.notes),runNotes,state.settings.combatModel,JSON.stringify(t.monsterDamage),JSON.stringify(t.kills.filter(k=>(k.oneShot||k.perfect)&&!k.monster.boss).map(k=>({monsterId:k.monster.id,monster:k.monster.name,decision:k.lootDecision}))),t.kills.filter(k=>k.oneShot).length,JSON.stringify(t.directionReward||null)]);
   // Quoting preserves delimiters; an apostrophe prevents spreadsheet formula evaluation of user notes/seeds.
   const cell=v=>{let s=String(v??'');if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';};
   return '\uFEFF'+[header,...rows].map(row=>row.map(cell).join(',')).join('\r\n');

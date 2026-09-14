@@ -1,5 +1,5 @@
-import {createGame,assign,chooseLoot,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV,hasPersistentHP,monsterHP,monsterATK,isRewardKill} from './engine.mjs';
-import {LABELS,SYMBOLS,effectText,upgradedEffects,VERSION} from './data.mjs';
+import {createGame,assign,chooseLoot,chooseFirstReward,firstRewardMonster,canTargetEffect,effectValue,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV,hasPersistentHP,monsterHP,monsterATK,isRewardKill} from './engine.mjs';
+import {LABELS,SYMBOLS,effectText,effectDescription,DIRECTION_REWARDS,upgradedEffects,VERSION} from './data.mjs';
 const $=id=>document.getElementById(id);
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const randomSeed=()=>crypto.randomUUID();
@@ -23,6 +23,19 @@ function combatStats(m,damage,remaining,attacker,planning,perfect,killed){
 const rewardName=()=>hasPersistentHP(game)?'One-shot':'Perfect';
 const targetName=id=>id==='self'?'You':game.row.find(m=>m?.id===id)?.name||'—';
 function announce(text){$('message').textContent=text;}
+function handToken(card,e,i,planning){
+  const key=`${card.id}:${i}`,assigned=game.assignments[key],target=game.row.find(m=>m?.id===assigned);
+  const unavailable=e.requires&&!game.row.some(m=>m&&canTargetEffect(game,e,m));
+  const value=assigned?effectValue(game,e,target):e.bonusWhen?`${e.value}–${e.bonusValue}`:e.value;
+  const description=effectDescription(e);
+  return `<button class="token effect-${e.type} ${selected?.key===key?'active':''} ${assigned?'assigned':''}" data-effect="${key}" aria-label="${esc(card.name)}, ${LABELS[e.type]} ${value}, effect ${i+1}${description?', '+description:''}${assigned?', assigned to '+targetName(assigned):''}" aria-pressed="${!!assigned||selected?.key===key}" ${!planning||game.scrapId===card.id||unavailable?'disabled':''}><span class="token-value"><span>${LABELS[e.type]}</span><strong>${value}</strong></span>${description?`<small class="effect-condition">${description}</small>`:''}</button>`;
+}
+function firstRewardHTML(planning,p){
+  const monster=planning?firstRewardMonster(game,p):null;if(!monster)return '';
+  const choice=game.firstRewardSelection?.monsterId===monster.id?game.firstRewardSelection.choice:'monster';
+  const options=[{key:'monster',name:monster.loot,effects:upgradedEffects(monster.effects)},...Object.entries(DIRECTION_REWARDS).map(([key,card])=>({key,...card}))];
+  return `<section class="first-reward" aria-labelledby="first-reward-title"><h2 id="first-reward-title">Choose your first One-shot reward</h2><p>Choose one reward for ${esc(monster.name)}. This choice is offered once per run.</p><div class="reward-cards" role="group" aria-label="First One-shot reward">${options.map(card=>`<button data-first-reward="${card.key}" aria-pressed="${choice===card.key}"><strong>${esc(card.name)}</strong><span>${esc(effectText(card.effects))}</span><small>${card.key==='monster'?'Upgraded monster loot':'Alternative reward'} · ${choice===card.key?'Selected':'Choose'}</small></button>`).join('')}</div><p class="fine">One card goes to discard at End Turn. If several One-shots take loot, this replaces the leftmost reward.</p></section>`;
+}
 function act(fn){try{fn();render();}catch(e){announce(e.message);}}
 const mobileMedia=matchMedia('(max-width:720px), (max-width:1000px) and (max-height:600px)');
 const dockObserver=new ResizeObserver(()=>measureDock());
@@ -39,9 +52,10 @@ function updateDockSpace(){
 function showMonsterDetails(id){
   const m=game.row.find(m=>m?.id===id);if(!m)return;
   const p=preview(game),perfect=game.phase==='planning'&&isRewardKill(game,m,p.attacks[id]||0);
+  const alternative=firstRewardMonster(game,p)?.id===m.id&&game.firstRewardSelection?.monsterId===m.id?DIRECTION_REWARDS[game.firstRewardSelection.choice]:null;
   $('monster-details-title').textContent=m.name;
   $('monster-details-content').innerHTML=`<p>${m.boss?`Boss · Stage ${m.stage} of 3`:`Floor ${m.floor}`}</p><p>${hasPersistentHP(game)?`Health: ${m.hp} / ${m.maxHp} HP · Attack: ${m.atk}`:`Threat: ${m.threat}`}</p>
-    <h3>${m.boss?'Boss rules':esc(m.loot)}</h3><p>${m.boss?'No loot. You cannot Endure a boss. Defeat Stage 3 to win.':`${effectText(perfect?upgradedEffects(m.effects):m.effects)}${perfect?` · ${rewardName()} upgrade`:''}. Taken loot goes to discard.`}</p>
+    <h3>${m.boss?'Boss rules':esc(alternative?.name||m.loot)}</h3><p>${m.boss?'No loot. You cannot Endure a boss. Defeat Stage 3 to win.':`${effectText(alternative?.effects||(perfect?upgradedEffects(m.effects):m.effects))}${perfect&&!alternative?` · ${rewardName()} upgrade`:''}. Taken loot goes to discard.`}</p>
     <p>${hasPersistentHP(game)?'Wounds persist between turns. Losing HP does not lower Attack. A One-shot kills from full HP in one turn. Multiple cards and overkill count. Take upgraded loot or skip it (at most one skip per turn). Wounded kills always give normal loot.':'Meet Threat to kill. An exact match earns a choice: take upgraded loot or skip it.'}</p>`;
   $('monster-details').showModal();
 }
@@ -65,7 +79,7 @@ syncMobileMenu();
 function render(){
   const focused=document.activeElement;
   const focusKey=focused?.dataset?.effect || focused?.dataset?.target;
-  const focusId=focused?.id,focusCard=focused?.dataset?.card,focusLoot=focused?.dataset?.lootMonster,focusLootChoice=focused?.dataset?.lootChoice;
+  const focusId=focused?.id,focusCard=focused?.dataset?.card,focusLoot=focused?.dataset?.lootMonster,focusLootChoice=focused?.dataset?.lootChoice,focusReward=focused?.dataset?.firstReward;
   const planning=game.phase==='planning',p=preview(game),total=deck(game).length;
   const persistent=hasPersistentHP(game),pressure=persistent?'Attack':'Threat';
   const skippedMonster=Object.keys(game.lootChoices).find(id=>game.lootChoices[id]==='skip');
@@ -75,17 +89,20 @@ function render(){
     if(!m)return `<div class="empty-slot"><span class="slot-num">0${i+1}</span><span>${game.pendingBoss?.slot===i?'Next boss stage':'Empty slot'}</span></div>`;
     const threshold=monsterHP(game,m),n=p.attacks[m.id]||0,killed=planning&&n>=threshold,perfect=killed&&isRewardKill(game,m,n);
     const skipLoot=perfect&&!m.boss&&game.lootChoices[m.id]==='skip';
+    const first=planning?firstRewardMonster(game,p):null;
+    const alternative=m.id===first?.id&&game.firstRewardSelection?.monsterId===m.id?DIRECTION_REWARDS[game.firstRewardSelection.choice]:null;
     const attacker=planning?p.attacker?.id===m.id:game.phase==='choice'&&game.current.attacker?.id===m.id;
     return `<div class="monster-slot"><button class="monster ${m.boss?'boss':''} ${attacker?'attacker':''} ${killed?'killed':''} ${perfect?'perfect':''} ${skipLoot?'loot-skipped':''}" data-target="${m.id}" ${planning?'':'disabled'} aria-label="${esc(m.name)}, ${persistent?`${m.hp} of ${m.maxHp} HP, Attack ${m.atk}${planning&&n>0?`, ${p.remainingHP[m.id]} HP after damage`:''}`:`Threat ${m.threat}`}${attacker?planning?', attacks you':', attacked you':''}${perfect?`, ${rewardName()} kill`:killed?', defeated':''}, ${m.loot?`loot ${esc(m.loot)}, ${effectText(m.effects)}`:`boss-stage ${m.stage}`}">
       <span class="meta"><span>${m.boss?`BOSS · STAGE ${m.stage}/3`:`FLOOR ${m.floor} · 0${i+1}`}</span><span>${persistent?'':attacker?'ATTACKING':perfect?'PERFECT':killed?'KILL':''}</span></span>
       <span class="name">${m.name}</span>${persistent?combatStats(m,n,p.remainingHP[m.id],attacker,planning,perfect,killed):`<span class="threat-row"><span class="threat">${m.threat}</span><span class="threat-label">Threat</span></span><span class="attack-meter"><span><strong>${planning?n:0}</strong> / ${threshold} Attack</span><span class="kill-label">${perfect?'Perfect ✓':killed?'Defeated ✓':''}</span></span>`}
-      <span class="loot"><small>${m.boss?'FINAL STAND':skipLoot?`${rewardName().toUpperCase()} · NO LOOT`:perfect?`${rewardName().toUpperCase()} LOOT · +1`:'LOOT ON KILL'}</small><span class="loot-name">${m.loot||'No loot'}</span><span class="effects-inline">${m.boss?`Stage ${m.stage} of 3`:skipLoot?'No loot will be added':effectsHTML(perfect?upgradedEffects(m.effects):m.effects)}</span></span>
+      <span class="loot"><small>${m.boss?'FINAL STAND':skipLoot?`${rewardName().toUpperCase()} · NO LOOT`:alternative?'ONE-SHOT · CHOSEN REWARD':perfect?`${rewardName().toUpperCase()} LOOT · +1`:'LOOT ON KILL'}</small><span class="loot-name">${alternative?.name||m.loot||'No loot'}</span><span class="effects-inline">${m.boss?`Stage ${m.stage} of 3`:skipLoot?'No loot will be added':alternative?esc(effectText(alternative.effects)):effectsHTML(perfect?upgradedEffects(m.effects):m.effects)}</span></span>
     </button>${perfect&&!m.boss?`<div class="loot-options" role="group" aria-label="${rewardName()} loot for ${esc(m.name)}"><span>${rewardName()} · 1 skip per turn</span><div><button data-loot-monster="${m.id}" data-loot-choice="take" aria-pressed="${!skipLoot}">Take loot</button><button data-loot-monster="${m.id}" data-loot-choice="skip" aria-pressed="${skipLoot}">${skippedMonster&&skippedMonster!==m.id?'Move skip here':'Skip loot'}</button></div></div>`:''}<button class="monster-info mobile-only" data-info="${m.id}" aria-label="Details for ${esc(m.name)}" aria-haspopup="dialog">ⓘ</button></div>`;
   }).join('');
-  const handHTML=game.hand.map(c=>`<article class="hand-card ${c.upgraded?'upgraded':''} ${game.scrapId===c.id?'scrapped':''} ${selectedCard===c.id?'selected-card':''}">
+  const handHTML=game.hand.map(c=>`<article class="hand-card ${c.choice?'choice-card':''} ${c.upgraded?'upgraded':''} ${game.scrapId===c.id?'scrapped':''} ${selectedCard===c.id?'selected-card':''}">
     <div class="card-head"><div><h3 class="card-name">${c.name}</h3>${c.upgraded?`<span class="upgrade">${rewardName().toUpperCase()} LOOT</span>`:''}</div></div>
-    <div class="tokens">${c.effects.map((e,i)=>{const key=`${c.id}:${i}`,assigned=game.assignments[key];return `<button class="token effect-${e.type} ${selected?.key===key?'active':''} ${assigned?'assigned':''}" data-effect="${key}" aria-label="${c.name}, ${LABELS[e.type]} ${e.value}, effect ${i+1}${assigned?', assigned to '+targetName(assigned):''}" aria-pressed="${e.type==='attack'?selected?.key===key:!!assigned}" ${!planning||game.scrapId===c.id?'disabled':''}><span>${LABELS[e.type]}</span><strong>${e.value}</strong></button>`;}).join('')}</div>
-    <div class="destinations">${game.scrapId===c.id?'Removed at End Turn':c.effects.map((e,i)=>{const t=game.assignments[`${c.id}:${i}`];return t?`${e.value} → ${targetName(t)}`:'';}).filter(Boolean).join(' · ')||'Unassigned'}</div>
+    ${c.choice?'<span class="choice-label">Choose one · switch anytime before End Turn</span>':''}
+    <div class="tokens">${c.effects.map((e,i)=>handToken(c,e,i,planning)).join('')}</div>
+    <div class="destinations">${game.scrapId===c.id?'Removed at End Turn':c.effects.map((e,i)=>{const t=game.assignments[`${c.id}:${i}`];return t?`${effectValue(game,e,game.row.find(m=>m?.id===t))} → ${targetName(t)}`:'';}).filter(Boolean).join(' · ')||'Unassigned'}</div>
     ${game.settings.scrap?`<button class="card-scrap" data-card="${c.id}" ${planning?'':'disabled'} aria-pressed="${game.scrapId===c.id}" aria-label="${game.scrapId===c.id?'Undo Scrap for':'Scrap'} ${c.name}" title="Scrap one whole card per turn. No effects or replacement. You can undo before End Turn."><span class="desktop-only">${game.scrapId===c.id?'↶ Undo Scrap':'Scrap card'}</span><span class="mobile-only">${game.scrapId===c.id?'Undo':'Scrap'}</span></button>`:''}
   </article>`).join('');
   const last=game.history.at(-1);
@@ -101,28 +118,31 @@ function render(){
     <div class="section-label model-heading"><h1>${persistent?'Persistent HP + Attack':'Classic Threat'}</h1><span>+1 ${pressure} ${game.settings.escalation===1?'after every turn':'after even turns'}</span></div>
     <div class="row">${monsterHTML}</div>
     <div class="outcome-strip">${planning?`<span>${p.won?'<strong>Stage 3 defeated · you win immediately</strong>':p.attacker?`<strong>${p.attacker.name}</strong> attacks with ${monsterATK(game,p.attacker)} ${persistent?'Attack':''}`:'<strong>No enemy attacks</strong>'}</span><span><span class="healing">+${p.healed} Heal</span> · ${p.block} Block · <span class="damage">${p.damage} damage</span> → <strong>${p.hpAfter} HP</strong></span>`:`<span>${game.phase==='choice'?'Choose what happens to the attacker.':'Run finished.'}</span>`}</div>
-    ${banner}<section class="hand-area"><div class="section-label"><h2>Your hand</h2><span class="draw-count">${game.draw.length} in draw · ${game.discard.length} in discard</span><button class="mobile-only quiet" data-reset ${planning?'':'disabled'}>Reset</button></div><div class="hand">${handHTML||'<p class="fine">No cards available. You can still end the turn.</p>'}</div><div class="hand-actions"><div class="hand-actions-left"><button data-reset ${planning?'':'disabled'}>Reset assignments</button>${game.settings.scrap?`<button class="scrap-target" data-scrap ${planning?'':'disabled'}>${game.scrapId?'Undo Scrap':'Scrap · one whole card'}</button>`:''}</div><button class="primary" id="end-turn" ${planning?'':'disabled'}>End Turn <span aria-hidden="true">→</span></button></div>${game.settings.scrap?'<p class="scrap-hint">Scrap up to 1 card per turn. Use its button to remove it instead of playing it. No replacement card.</p>':''}<p class="selection-hint">${planning?hint:game.phase==='choice'?'Assignments are locked until you choose Endure or Leave.':'Start a new run to play again.'}</p></section>`;
+    ${banner}<section class="hand-area"><div class="section-label"><h2>Your hand</h2><span class="draw-count">${game.draw.length} in draw · ${game.discard.length} in discard</span><button class="mobile-only quiet" data-reset ${planning?'':'disabled'}>Reset</button></div><div class="hand">${handHTML||'<p class="fine">No cards available. You can still end the turn.</p>'}</div>${firstRewardHTML(planning,p)}<div class="hand-actions"><div class="hand-actions-left"><button data-reset ${planning?'':'disabled'}>Reset assignments</button>${game.settings.scrap?`<button class="scrap-target" data-scrap ${planning?'':'disabled'}>${game.scrapId?'Undo Scrap':'Scrap · one whole card'}</button>`:''}</div><button class="primary" id="end-turn" ${planning?'':'disabled'}>End Turn <span aria-hidden="true">→</span></button></div>${game.settings.scrap?'<p class="scrap-hint">Scrap up to 1 card per turn. Use its button to remove it instead of playing it. No replacement card.</p>':''}<p class="selection-hint">${planning?hint:game.phase==='choice'?'Assignments are locked until you choose Endure or Leave.':'Start a new run to play again.'}</p></section>`;
   $('board').dataset.selection=planning&&selected?selected.type:'';
   $('board').dataset.phase=game.phase;
   $('board').insertAdjacentHTML('beforeend',planning?`<section class="mobile-turnbar mobile-only" aria-label="Turn controls">
-    <div class="mobile-selection" role="status">${selected?`${LABELS[selected.type]} ${selected.value} selected · tap ${selected.type==='attack'?'a monster':'your health'}`:game.scrapId?'1 card marked for Scrap · 3 cards to play':'Heal / Block: tap · Attack: tap a target'}</div>
+    <div class="mobile-selection" role="status">${firstRewardMonster(game,p)?'<button class="reward-jump" data-show-reward>First One-shot: choose your reward ↓</button>':selected?`${LABELS[selected.type]} ${selected.value} selected · tap ${selected.type==='attack'?'a monster':'your health'}`:game.scrapId?'1 card marked for Scrap · 3 cards to play':'Heal / Block: tap · Attack: tap a target'}</div>
     <div class="mobile-forecast"><div><span>Heal +${p.healed} · Block ${p.block}</span><strong class="${p.hpAfter<=0?'lethal':''}">${p.won?'Victory this turn':`Damage ${p.damage} → ${p.hpAfter} HP`}</strong></div><button class="primary" id="mobile-end-turn">End Turn →</button></div>
   </section>`:'');
   updateDockSpace();
   $('deck-count').textContent=`${total} cards`;
-  $('deck-list').innerHTML=[['In hand',game.hand],['Draw · order hidden',game.draw.slice().sort((a,b)=>a.name.localeCompare(b.name))],['Discard',game.discard]].map(([name,cards])=>`<div class="deck-group"><h3>${name} · ${cards.length}</h3><div class="deck-items">${cards.map(c=>`<span class="deck-item">${c.name}${c.upgraded?' ★':''} · ${effectText(c.effects)}</span>`).join('')||'<span class="fine">Empty</span>'}</div></div>`).join('');
+  $('deck-list').innerHTML=[['In hand',game.hand],['Draw · order hidden',game.draw.slice().sort((a,b)=>a.name.localeCompare(b.name))],['Discard',game.discard]].map(([name,cards])=>`<div class="deck-group"><h3>${name} · ${cards.length}</h3><div class="deck-items">${cards.map(c=>`<span class="deck-item">${c.name}${c.upgraded?' ★':''} · ${effectText(c.effects,c.choice)}</span>`).join('')||'<span class="fine">Empty</span>'}</div></div>`).join('');
   $('log-count').textContent=`${game.history.length} completed turns`;
-  $('history-list').innerHTML=game.history.map(t=>`<div class="log-entry"><strong>Turn ${t.turn}</strong> · ${t.start.hp} → ${t.end.hp} HP · ${t.kills.map(k=>`${k.monster.name}${(k.oneShot||k.perfect)?' ★':''}${k.lootDecision==='skip'?' (loot skipped)':''}`).join(', ')||'no kills'} · ${t.decision==='boss-stays'?'boss stays automatically':t.decision} ${t.scrap?'· Scrap: '+t.scrap.name:''}</div>`).join('')||'<p class="fine">No completed turns yet.</p>';
+  $('history-list').innerHTML=game.history.map(t=>`<div class="log-entry"><strong>Turn ${t.turn}</strong> · ${t.start.hp} → ${t.end.hp} HP · ${t.kills.map(k=>`${k.monster.name}${(k.oneShot||k.perfect)?' ★':''}${k.lootDecision==='skip'?' (loot skipped)':k.rewardChoice?` (${esc(k.loot.name)})`:''}`).join(', ')||'no kills'} · ${t.decision==='boss-stays'?'boss stays automatically':t.decision} ${t.scrap?'· Scrap: '+t.scrap.name:''}</div>`).join('')||'<p class="fine">No completed turns yet.</p>';
   $('seed-label').textContent=`Seed: ${game.settings.seed} · v${VERSION}`;
   $('current-seed').textContent=game.settings.seed;
   $('build-label').textContent=`v${VERSION} · ${persistent?'HP + ATK TEST':'CLASSIC THREAT'}`;
   $('rules-turns').innerHTML=`<li>Draw 4 cards. Assign the effects you want to use.</li><li>Heal resolves first. ${persistent?'Attack reduces monster HP; wounds persist between turns. At 0 HP, the monster dies. A One-shot kills a monster from full HP in one turn, using one or more cards. Overkill counts. It earns a choice: take upgraded loot or skip it. Killing an already wounded monster gives normal loot, even with exact damage.':'Attack equal to or above Threat kills; an exact match earns a choice: take upgraded loot or skip it. Insufficient Attack has no effect.'} Normal kills always give loot. Skip at most one ${rewardName()} reward per turn. Move skip here transfers that choice; other ${persistent?'One-shots':'Perfects'} give upgraded loot. Take loot is selected by default. Taken loot goes to discard.</li><li>The surviving enemy with the highest ${pressure} attacks. Ties go to the leftmost enemy. Block reduces damage.${persistent?' Losing HP does not lower Attack.':''}</li><li>Choose Endure: remove the attacker without loot. Or Leave: keep it${persistent?' with its remaining HP':''}.</li><li>Survivors gain +1 ${pressure}${game.settings.escalation===2?' after even turns':''}.${persistent?' HP does not increase.':''} Empty slots refill. Discard your hand.</li>`;
   $('reward-note-label').textContent=`Intentionally planned ${persistent?'One-shots':'Perfects'}`;
+  if(persistent)$('rules-turns').insertAdjacentHTML('beforeend','<li>Cards marked Choose one allow only one effect per turn. Selecting another option replaces the first. Expose\'s Attack 4 requires a monster wounded before this turn. Damage assigned this turn does not activate wounded bonuses.</li><li>Your first taken One-shot reward can be upgraded monster loot, Executioner (Attack 6 vs full HP, otherwise 3), or Rend (Attack 6 vs previously wounded, otherwise 3). Receive one card, in discard. The monster loot is selected by default. Skipping all eligible loot preserves this opportunity. With multiple taken One-shots, the leftmost reward is replaced. This choice is consumed once, even if you take monster loot.</li>');
   $('rules-model').textContent=persistent?'HP starts at printed Threat. Attack starts at max(1, Threat − 2). Boss stages follow the same model; each new stage enters with full HP and fresh Attack.':'Classic v1.3: Threat is both the kill threshold and attack strength. Monster wounds do not persist.';
   if(last && game.phase==='planning') $('board').dataset.lastTurn=last.turn;
   if(focusKey){
     const replacement=[...$('board').querySelectorAll('button')].find(b=>b.dataset.effect===focusKey||b.dataset.target===focusKey);
     if(replacement&&!replacement.disabled)replacement.focus({preventScroll:true});
+  } else if(focusReward){
+    $('board').querySelector(`[data-first-reward="${focusReward}"]`)?.focus({preventScroll:true});
   } else if(focusLoot){
     [...$('board').querySelectorAll('[data-loot-monster]')].find(b=>b.dataset.lootMonster===focusLoot&&b.dataset.lootChoice===focusLootChoice)?.focus({preventScroll:true});
   } else if(focusCard){
@@ -141,7 +161,10 @@ function selectEffect(key){
     announce(`${LABELS[e.type]} ${e.value} ${enabled?'deactivated':'activated'}.`);return;
   }
   if(selected?.key===key){assign(game,id,Number(index),null);selected=null;}
-  else selected={key,id,index:Number(index),...e};
+  else {
+    if(c.choice)for(let i=0;i<c.effects.length;i++)if(i!==Number(index)&&game.assignments[`${id}:${i}`])assign(game,id,i,null);
+    selected={key,id,index:Number(index),...e};
+  }
   selectedCard=null;
 }
 function assignTarget(target){
@@ -155,8 +178,10 @@ $('board').addEventListener('click',event=>{
   if(performance.now()<suppressClickUntil){event.preventDefault();return;}
   const b=event.target.closest('button');if(!b||b.disabled)return;
   if(b.dataset.info){showMonsterDetails(b.dataset.info);return;}
+  if(b.hasAttribute('data-show-reward')){$('first-reward-title').scrollIntoView({block:'center',behavior:'smooth'});$('board').querySelector('[data-first-reward]')?.focus({preventScroll:true});return;}
   act(()=>{
-    if(b.dataset.lootMonster){chooseLoot(game,b.dataset.lootMonster,b.dataset.lootChoice);announce(b.dataset.lootChoice==='skip'?`Loot skip selected. Other ${rewardName()} kills will give upgraded loot.`:'Upgraded loot selected.');}
+    if(b.dataset.firstReward){chooseFirstReward(game,b.dataset.firstReward);announce('First One-shot reward selected. You can change it before End Turn.');}
+    else if(b.dataset.lootMonster){chooseLoot(game,b.dataset.lootMonster,b.dataset.lootChoice);announce(b.dataset.lootChoice==='skip'?`Loot skip selected. Other ${rewardName()} kills will give upgraded loot.`:'Upgraded loot selected.');}
     else if(b.dataset.effect)selectEffect(b.dataset.effect);
     else if(b.dataset.target)assignTarget(b.dataset.target);
     else if(b.dataset.card){scrap(game,game.scrapId===b.dataset.card?null:b.dataset.card);selectedCard=null;selected=null;announce(game.scrapId?'Card marked for Scrap. Its effects are disabled; it will be removed at End Turn.':'Scrap undone. You can use the card again.');}
@@ -253,7 +278,7 @@ if(document.modelContext?.registerTool){
       if(input&&Object.keys(input).length)throw Error('This tool takes no arguments.');
       const p=preview(game);
       return {turn:game.turn,phase:game.phase,combatModel:game.settings.combatModel,hp:game.hp,maxHP:game.maxHP,row:structuredClone(game.row),hand:structuredClone(game.hand),
-        assignments:{...game.assignments},lootChoices:{...game.lootChoices},scrapId:game.scrapId,
+        assignments:{...game.assignments},lootChoices:{...game.lootChoices},scrapId:game.scrapId,directionReward:structuredClone(game.directionReward),firstRewardSelection:structuredClone(game.firstRewardSelection),
         forecast:game.phase==='planning'?{healing:p.healed,block:p.block,attacker:p.attacker?.id||null,damage:p.damage,hpAfter:p.hpAfter,monsterHPAfter:p.remainingHP,kills:p.kills.map(m=>m.id),victory:p.won}:null};
     }};
   try{Promise.resolve(document.modelContext.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});}catch{/* Optional browser capability. */}

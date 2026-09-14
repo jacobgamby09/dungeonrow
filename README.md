@@ -1,8 +1,18 @@
-# Dungeon Row — prototype 0.6.0
+# Dungeon Row — prototype 0.7.0
 
-A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.7 one-shot.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
+A local, playable prototype with persistent monster HP and separate Attack. The classic Threat combat model is also available in Test settings. Current rules are described in `Dungeon Row - GDD v1.8 card choices.md`, building on the HP variant in `Dungeon Row - GDD v1.4 testvariant.md`. The update history is in `progress.md`.
 
 The interface is in English. Version 0.2.1 gives monsters a heart and health bar, a separate orange sword/Attack field, a damage preview on the health bar, and a label identifying the attacker. Player health uses the same heart symbol. Version 0.2.2 makes Scrap standard, adds Scrap card / Undo Scrap buttons to each hand card, and labels the unrevealed-monster counter Mobs left in dungeon. Card values are unchanged.
+
+## Card choices and first reward — v0.7.0
+
+The default HP starter still has ten cards. Both Clubs become **Guarded Strike** (Attack 3 OR Block 4), Torch becomes **Expose** (Attack 1 OR Attack 4 against a previously wounded monster), and Bandage becomes **Second Wind** (Heal 3 OR Attack 2). Cards marked **Choose one** allow only one option each turn. Selecting another option replaces the first; other multi-effect cards still allow all effects.
+
+A wound must already exist at the start of the turn. Assigning other damage this turn never activates Expose's restricted option or a wounded bonus. The restricted option is disabled if no eligible target exists.
+
+Your first taken One-shot reward offers **upgraded monster loot**, **Executioner** (Attack 6 vs full HP, otherwise 3), or **Rend** (Attack 6 vs previously wounded, otherwise 3). Choose during planning; the normal upgraded loot is the default. Exactly one card goes to discard. The opportunity is consumed at End Turn even if you take monster loot, and survives if you skip all eligible loot. With multiple taken One-shots, the leftmost reward is replaced. Changing the eligible monster resets the selection to its upgraded loot. A mobile shortcut opens the reward section.
+
+Conditional Attack values update for the assigned target. JSON/CSV retain the selected option, target, conditional card definitions, and the first reward selection. Classic mode retains its old starter and Perfect rules. Boss stats, One-shot eligibility, Scrap and Endure are unchanged.
 
 ## One-tap support effects and HP forecast — v0.5.0
 
@@ -67,7 +77,7 @@ Print single-sided at 100% / actual size with automatic orientation. Use one car
 
 ## Status and limitations
 
-Both combat models support click/tap, mouse and touch dragging, Scrap, test settings, notes, and exports. Starter cards, loot, and dungeon composition follow GDD v1.3. The HP variant also lowers initial enemy Attack, so improved survival cannot be attributed to persistent HP alone.
+Both combat models support click/tap, mouse and touch dragging, Scrap, test settings, notes, and exports. The classic starter and dungeon composition follow GDD v1.3; the HP starter and first reward use GDD v1.8. The HP variant also lowers initial enemy Attack, so improved survival cannot be attributed to persistent HP alone.
 
 Human playtesting is ongoing. Automated checks do not establish the design hypotheses H0–H6. Record the combat model, settings, and play medium for each test.
 
@@ -75,7 +85,10 @@ An optional read-only WebMCP tool exposes visible board information in supportin
 
 ## Verification and source
 
-- `npm test`: 49 rules tests, including 100 automated runs per combat model and checks for wounds, independent Attack, One-shots, classic Perfects, bosses, Scrap, and exports.
+The scripts below are available for browser QA on request. They were not run for v0.7.0; the current release was verified with rules tests and static asset/syntax checks. Historical simulation results remain pinned to v0.5.1 and v0.6.0 and do not describe the new choice cards.
+
+
+- `npm test`: 59 rules tests, including 100 automated runs per combat model and checks for choice exclusivity, conditional Attack, first rewards, wounds, independent Attack, One-shots, classic Perfects, bosses, Scrap, and exports.
 - `node scripts/verify-seeds.mjs`: random initial/restarted seeds and repeatable manual seeds on desktop and mobile.
 - `node scripts/verify-qol.mjs`: desktop/mobile checks for one-tap Heal/Block, undo, the HP forecast, Scrap interactions and resolved HP. Supports `DUNGEON_ROW_URL` for hosted checks.
 - `node scripts/verify-perfect-loot.mjs`: desktop and mobile checks for One-shot loot choices, preserving skips with overkill, invalidating a kill, resolving the turn and exporting the resulting deck. Set `DUNGEON_ROW_URL` to verify a hosted version.

@@ -114,3 +114,7 @@ dialog::backdrop{background:#000a}
   .stats-right{gap:10px}.stats-right .stat small{max-width:85px}
 }
 #current-seed{overflow-wrap:anywhere}
+
+@media(max-width:720px),(max-width:1000px) and (max-height:600px){
+  .choice-card .tokens{flex-direction:column;gap:5px}.hand-card .choice-label{font-size:.625rem}.hand-card .token .effect-condition{font-size:.625rem;white-space:normal}.token .token-value{gap:6px}.first-reward{padding:12px;margin:14px 0;scroll-margin-bottom:var(--dock-height,140px)}.reward-cards{grid-template-columns:1fr;gap:8px}.reward-cards button{padding:10px 12px}.reward-cards button>span{font-size:.75rem}
+}

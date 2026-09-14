@@ -1,6 +1,6 @@
-export const VERSION = '0.6.0';
+export const VERSION = '0.7.0';
 export const GDD = '1.6-classic-single-skip-test';
-export const HP_RULESET = '1.7-hp-atk-one-shot-test';
+export const HP_RULESET = '1.8-hp-atk-card-choices-test';
 const effects = (...pairs) => pairs.map(([type, value]) => ({ type, value }));
 export const STARTER = [
   { name: 'Rusty Strike', count: 3, effects: effects(['attack', 2]) },
@@ -10,6 +10,15 @@ export const STARTER = [
   { name: 'Block', count: 2, effects: effects(['block', 3]) },
   { name: 'Bandage', count: 1, effects: effects(['heal', 3]) },
 ];
+export const CHOICE_STARTER = STARTER.map(card=>({
+  Club:{name:'Guarded Strike',count:2,choice:true,effects:effects(['attack',3],['block',4])},
+  Torch:{name:'Expose',count:1,choice:true,effects:[{type:'attack',value:1},{type:'attack',value:4,requires:'wounded'}]},
+  Bandage:{name:'Second Wind',count:1,choice:true,effects:effects(['heal',3],['attack',2])},
+}[card.name]||card));
+export const DIRECTION_REWARDS = {
+  executioner:{name:'Executioner',effects:[{type:'attack',value:3,bonusValue:6,bonusWhen:'full'}]},
+  rend:{name:'Rend',effects:[{type:'attack',value:3,bonusValue:6,bonusWhen:'wounded'}]},
+};
 export const MONSTERS = [
   { key:'rat', name:'Rat', floor:1, count:2, threat:2, loot:'Rat Hide', effects:effects(['block',1]) },
   { key:'bat', name:'Bat', floor:1, count:2, threat:3, loot:'Bat Fang', effects:effects(['attack',1],['attack',1]) },
@@ -31,4 +40,9 @@ export const BOSS_THREATS = [8,11,14];
 export const LABELS = { attack:'Attack', block:'Block', heal:'Heal' };
 export const SYMBOLS = { attack:'↗', block:'◇', heal:'+' };
 export function upgradedEffects(list) { return list.map((e,i) => ({...e, value:e.value + (i===0 ? 1:0)})); }
-export function effectText(list) { return list.map(e=>`${LABELS[e.type]} ${e.value}`).join(' / '); }
+export function effectDescription(e) {
+  if(e.requires==='wounded')return 'Previously wounded only';
+  if(e.bonusWhen)return `${e.bonusValue} vs ${e.bonusWhen==='full'?'full HP':'previously wounded'}; otherwise ${e.value}`;
+  return '';
+}
+export function effectText(list,choice=false) { return list.map(e=>`${LABELS[e.type]} ${e.value}${effectDescription(e)?` (${effectDescription(e)})`:''}`).join(choice?' OR ':' / '); }

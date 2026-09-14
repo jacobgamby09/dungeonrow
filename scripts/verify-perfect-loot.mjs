@@ -11,7 +11,7 @@ try{
     page.on('pageerror',e=>errors.push(e.message));
     page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
     const click=async locator=>mobile?locator.tap():locator.click();
-    const token=i=>page.locator('[data-effect]').nth(i);
+    const token=i=>page.locator('.token.effect-attack').nth(i);
     const monster=i=>page.locator('.monster').nth(i);
     const option=(i,choice)=>page.locator('.monster-slot').nth(i).locator(`[data-loot-choice="${choice}"]`);
     await page.goto(process.env.DUNGEON_ROW_URL||'http://127.0.0.1:4173');await page.evaluate(()=>{document.querySelector('#seed').value='dungeon-01';document.querySelector('#new-run').requestSubmit();});

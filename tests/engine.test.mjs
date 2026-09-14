@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createGame,makeCard,makeMonster,beginTurn,refill,assign,choosePerfectLoot,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV} from '../dist/engine.mjs';
-import {MONSTERS} from '../dist/data.mjs';
+import {createGame,makeCard,makeMonster,beginTurn,refill,assign,choosePerfectLoot,chooseFirstReward,firstRewardMonster,canTargetEffect,effectValue,scrap,resetAssignments,preview,resolve,choose,deck,exportRun,exportCSV} from '../dist/engine.mjs';
+import {MONSTERS,CHOICE_STARTER,DIRECTION_REWARDS} from '../dist/data.mjs';
 const e=(type,value)=>({type,value});
 function fixture(names=['goblin','slime','guard','skeleton'],cards=[[e('attack',3)],[e('attack',2)],[e('attack',1),e('attack',1)],[e('block',3)]],opts={}){
   const g=createGame(opts);g.row=names.map((name,i)=>name?makeMonster(name,`test${i}`,opts.combatModel):null);
@@ -170,9 +170,87 @@ test('100 automated smoke runs finish without corrupting cards, row or logs',()=
 });
 
 const hpFixture=(names=['guard'],cards=[[e('attack',3)],[e('attack',2)]],opts={})=>fixture(names,cards,{combatModel:'persistent-hp',...opts});
+function choiceCard(g,name){
+  const def=CHOICE_STARTER.find(c=>c.name===name)||Object.values(DIRECTION_REWARDS).find(c=>c.name===name);
+  return makeCard(g,def.name,def.effects,false,def.choice);
+}
+test('HP starter replaces exactly four cards and keeps ten cards; classic starter is preserved',()=>{
+  const g=createGame({combatModel:'persistent-hp'}),cards=deck(g);
+  assert.equal(cards.length,10);assert.equal(cards.filter(c=>c.choice).length,4);
+  assert.equal(cards.filter(c=>c.name==='Guarded Strike').length,2);
+  assert.equal(cards.filter(c=>c.name==='Expose').length,1);assert.equal(cards.filter(c=>c.name==='Second Wind').length,1);
+  assert.ok(!cards.some(c=>['Club','Torch','Bandage'].includes(c.name)));
+  assert.equal(deck(createGame()).filter(c=>c.choice).length,0);
+});
+test('choice effects replace each other atomically and Scrap removes the entire choice card',()=>{
+  const g=hpFixture(['guard']);g.hand=[choiceCard(g,'Guarded Strike'),choiceCard(g,'Second Wind')];g.hp=10;beginTurn(g);
+  a(g,0,0,0);assert.equal(preview(g).attacks.test0,3);a(g,0,1,'self');
+  assert.equal(preview(g).attacks.test0,undefined);assert.equal(preview(g).block,4);
+  a(g,1,0,'self');assert.equal(preview(g).healed,3);a(g,1,1,0);
+  assert.equal(preview(g).healed,0);assert.equal(preview(g).attacks.test0,2);
+  a(g,0,0,0);assert.equal(preview(g).block,0);assert.equal(preview(g).attacks.test0,5);
+  chooseFirstReward(g,'rend');scrap(g,g.hand[0].id);
+  assert.equal(preview(g).attacks.test0,2);assert.equal(g.firstRewardSelection,null);
+  assert.throws(()=>a(g,0,1,'self'));scrap(g,null);a(g,0,1,'self');
+  resetAssignments(g);assert.deepEqual(g.assignments,{});assert.equal(preview(g).block,0);
+});
+test('Expose requires a previous-turn wound; same-turn chip cannot enable it',()=>{
+  const g=hpFixture(['guard','guard']);g.row[1].hp=4;
+  g.hand=[choiceCard(g,'Expose'),makeCard(g,'Chip',[e('attack',1)])];beginTurn(g);
+  a(g,0,0,0);a(g,1,0,0);assert.equal(preview(g).remainingHP.test0,3);
+  const before=structuredClone(g.assignments);assert.throws(()=>a(g,0,1,0),/start of this turn/);assert.deepEqual(g.assignments,before);
+  a(g,0,1,1);assert.equal(preview(g).attacks.test0,1);assert.equal(preview(g).attacks.test1,4);
+  resolve(g);assert.equal(g.current.kills[0].oneShot,false);assert.equal(g.current.kills[0].loot.upgraded,false);
+});
+test('Executioner and Rend use start-of-turn health regardless of assignment order',()=>{
+  for(const reverse of [false,true]){
+    const g=hpFixture(['ogre','ogre']);g.row[1].hp=11;
+    g.hand=[choiceCard(g,'Executioner'),choiceCard(g,'Rend'),makeCard(g,'Chip',[e('attack',1)])];beginTurn(g);
+    assert.equal(effectValue(g,g.hand[0].effects[0],g.row[0]),6);assert.equal(effectValue(g,g.hand[0].effects[0],g.row[1]),3);
+    assert.equal(effectValue(g,g.hand[1].effects[0],g.row[0]),3);assert.equal(effectValue(g,g.hand[1].effects[0],g.row[1]),6);
+    for(const i of reverse?[2,1,0]:[0,1,2])a(g,i,0,0);
+    assert.equal(preview(g).attacks.test0,10);
+    a(g,1,0,1);assert.equal(preview(g).attacks.test0,7);assert.equal(preview(g).attacks.test1,6);
+    resolve(g);choose(g,'leave');
+    assert.equal(effectValue(g,g.discard.find(c=>c.name==='Executioner')?.effects[0]||DIRECTION_REWARDS.executioner.effects[0],g.row[0]),3);
+  }
+});
+for(const rewardChoice of ['monster','executioner','rend'])test(`first taken One-shot grants exactly one ${rewardChoice} reward and cannot repeat`,()=>{
+  const g=hpFixture(['rat','guard'],[[e('attack',2)],[e('block',20)]]);
+  a(g,0,0,0);chooseFirstReward(g,rewardChoice);a(g,1,0,'self');
+  assert.equal(exportRun(g).current.firstRewardSelection.choice,rewardChoice);assert.equal(g.directionReward,null);
+  resolve(g);assert.equal(g.discard.length,1);
+  const loot=g.current.kills[0].loot;
+  assert.equal(loot.name,rewardChoice==='monster'?'Rat Hide':DIRECTION_REWARDS[rewardChoice].name);
+  assert.equal(loot.upgraded,rewardChoice==='monster');assert.equal(g.directionReward.choice,rewardChoice);
+  assert.equal(g.current.kills[0].rewardChoice,rewardChoice);choose(g,'endure');
+  assert.equal(exportRun(g).directionReward.card.id,loot.id);assert.ok(exportCSV(g).includes('first_reward'));
+  g.row=[makeMonster('rat','later','persistent-hp'),null,null,null];g.hand=[makeCard(g,'Strike',[e('attack',2)])];beginTurn(g);a(g,0,0,0);
+  assert.equal(firstRewardMonster(g),null);assert.throws(()=>chooseFirstReward(g,'rend'));
+  resolve(g);assert.equal(g.history.at(-1).kills[0].loot.name,'Rat Hide');
+});
+test('skipping the first One-shot preserves the offer for a later turn',()=>{
+  const g=hpFixture(['rat','guard'],[[e('attack',2)],[e('block',20)]]);a(g,0,0,0);a(g,1,0,'self');
+  chooseFirstReward(g,'rend');choosePerfectLoot(g,'test0','skip');
+  assert.equal(firstRewardMonster(g),null);assert.equal(g.firstRewardSelection,null);resolve(g);choose(g,'endure');assert.equal(g.directionReward,null);
+  g.row=[makeMonster('rat','later','persistent-hp'),null,null,null];g.hand=[makeCard(g,'Strike',[e('attack',2)])];beginTurn(g);a(g,0,0,0);
+  assert.equal(firstRewardMonster(g).id,'later');chooseFirstReward(g,'executioner');resolve(g);assert.equal(g.directionReward.choice,'executioner');
+});
+test('multiple One-shots replace only the leftmost taken loot; changing that target resets the reward',()=>{
+  const g=hpFixture(['rat','rat'],[[e('attack',2)],[e('attack',2)]]);a(g,0,0,0);a(g,1,0,1);
+  chooseFirstReward(g,'rend');choosePerfectLoot(g,'test0','skip');assert.equal(g.firstRewardSelection,null);assert.equal(firstRewardMonster(g).id,'test1');
+  chooseFirstReward(g,'executioner');choosePerfectLoot(g,'test0','take');assert.equal(g.firstRewardSelection,null);
+  chooseFirstReward(g,'rend');resolve(g);
+  assert.deepEqual(g.history[0].kills.map(k=>k.loot.name),['Rend','Rat Hide']);assert.equal(g.history[0].kills[1].loot.upgraded,true);
+});
+test('ordinary wounded kills and boss kills do not consume the first reward',()=>{
+  const g=hpFixture(['guard'],[[e('attack',5)]]);g.row[0].hp=2;beginTurn(g);a(g,0,0,0);
+  assert.equal(firstRewardMonster(g),null);assert.throws(()=>chooseFirstReward(g,'rend'));resolve(g);assert.equal(g.directionReward,null);
+  const h=hpFixture([null],[[e('attack',8)]]);h.dungeon=[];refill(h);beginTurn(h);a(h,0,0,0);resolve(h);assert.equal(h.directionReward,null);
+});
 test('HP model starts with separate HP/ATK, while keeping the same seed and card order',()=>{
   const g=createGame({combatModel:'persistent-hp'}),classic=createGame();
-  assert.equal(g.gdd,'1.7-hp-atk-one-shot-test');assert.deepEqual(g.hand,classic.hand);
+  assert.equal(g.gdd,'1.8-hp-atk-card-choices-test');assert.deepEqual(g.hand.map(c=>c.id),classic.hand.map(c=>c.id));
   for(const m of [...g.row,...g.dungeon]){assert.equal(m.hp,m.threat);assert.equal(m.maxHp,m.threat);assert.equal(m.atk,Math.max(1,m.threat-2));}
   assert.throws(()=>createGame({combatModel:'unknown'}));
 });
@@ -208,7 +286,7 @@ test('One-shot combines cards and upgrades the first effect with exact damage or
     assert.equal(kill.oneShot,true);assert.equal(kill.perfect,false);assert.equal(kill.lootDecision,'take');
     assert.deepEqual(kill.loot.effects,[e('attack',3),e('attack',2)]);
     assert.equal(exportRun(g).turns[0].kills[0].oneShot,true);
-    const csv=exportCSV(g).split('\r\n');assert.ok(csv[0].endsWith('"one_shots"'));assert.ok(csv[1].endsWith('"1"'));
+    const csv=exportCSV(g).split('\r\n');assert.ok(csv[0].includes('"one_shots"'));assert.ok(csv[0].endsWith('"first_reward"'));assert.equal(exportRun(g).directionReward.choice,'monster');
   }
 });
 test('One-shot skip survives overkill, transfers, and resets after moving or scrapping required damage',()=>{
@@ -260,7 +338,7 @@ test('HP stage 3 wins immediately even with a lethal survivor',()=>{
 });
 test('HP model exports its ruleset, combat mode and wound data in JSON/CSV',()=>{
   const g=hpFixture();a(g,0,0,0);resolve(g);choose(g,'leave');const out=exportRun(g);
-  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.7-hp-atk-one-shot-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
+  assert.equal(out.settings.combatModel,'persistent-hp');assert.equal(out.gdd,'1.8-hp-atk-card-choices-test');assert.equal(out.turns[0].end.row[0].hp,2);assert.equal(out.turns[0].end.row[0].atk,4);
   assert.ok(exportCSV(g).includes('combat_model'));assert.ok(exportCSV(g).includes('hpBefore'));assert.ok(exportCSV(g).includes('persistent-hp'));
 });
 test('100 HP smoke runs complete without negative survivor HP or losing wounds',()=>{
@@ -268,7 +346,11 @@ test('100 HP smoke runs complete without negative survivor HP or losing wounds',
     const g=createGame({seed:`hp-smoke-${seed}`,combatModel:'persistent-hp'});
     while(g.phase!=='finished'&&g.turn<150){
       const strongest=g.row.filter(Boolean).reduce((a,b)=>a.atk>=b.atk?a:b);
-      for(const c of g.hand)c.effects.forEach((ef,i)=>assign(g,c.id,i,ef.type==='attack'?strongest.id:'self'));
+      for(const c of g.hand){
+        const legal=c.effects.map((ef,i)=>({ef,i})).filter(({ef})=>ef.type!=='attack'||canTargetEffect(g,ef,strongest));
+        for(const {ef,i} of c.choice?[legal[(seed+g.turn)%legal.length]]:legal)assign(g,c.id,i,ef.type==='attack'?strongest.id:'self');
+      }
+      if(firstRewardMonster(g))chooseFirstReward(g,['monster','executioner','rend'][seed%3]);
       resolve(g);if(g.phase==='choice')choose(g,seed%2?'endure':'leave');
       for(const m of g.row.filter(Boolean)){assert.ok(m.hp>0&&m.hp<=m.maxHp);assert.ok(m.atk>=1);}
     }
